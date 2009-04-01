@@ -1,119 +1,164 @@
-#include <cassert>
-#include <cctype>
-#include <cstring>
-#include <iostream>
-#include <string>
-using namespace std;
-
-#ifdef WIN32
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-#else
-  #include <netdb.h> // getaddrinfo etc.
-  #include <sys/socket.h>
-#endif
-
 #include "../common/common.h"
+#include "../common/framework.h"
+using namespace std;
 
 namespace{
 
-  /* Use small buffer to be able to test our client in interactive mode
-   *
+struct Settings:
+  public framework::settings::Base,
+  public framework::settings::mixins::SocketTypeMixin,
+  public framework::settings::mixins::InputMixin,
+  public framework::settings::mixins::OutputMixin,
+  public framework::settings::mixins::AddressMixin,
+  public framework::settings::mixins::PortMixin,
+  public framework::settings::mixins::BufferSizeMixin {
+
+  /*
+   * NOTE: SocketTypeMixin is not mentioned in methods as we do not want this
+   * option to be available in all modes (to be precise, in "select" mode).
    */
-const unsigned int BUFSIZE = 10; // bytes
 
-int socket_type = SOCK_STREAM;
-string addr("localhost");
-string port("28635");
+  /* override */ virtual std::string options() const{
+    return
+      framework::settings::mixins::InputMixin::option() +
+      framework::settings::mixins::OutputMixin::option() +
+      framework::settings::mixins::AddressMixin::option() +
+      framework::settings::mixins::PortMixin::option() +
+      framework::settings::mixins::BufferSizeMixin::option();
+  }
 
-void usage(ostream & o){
-  o << "Usage: client [-h] [-m MODE] [-a ADDRESS] [-p PORT]\n"
-    << '\n'
-    << "Options:\n"
-    << '\n'
-    << "-h       -  print this message and exit\n"
-    << '\n'
-    << "Arguments:\n"
-    << '\n'
-    << "MODE     -  \"UDP\" or \"TCP\" (case insensitive).\n"
-    << "            Default: TCP.\n"
-    << "ADDRESS  -  IPv4 or IPv6 address or host name.\n"
-    << "            Default: localhost.\n"
-    << "PORT     -  port number or service name (e.g., \"http\").\n"
-    << "            Default: 28635.\n";
-}
+  /* override */ virtual std::string options_help() const{
+    return string() +
+      "-" + framework::settings::mixins::InputMixin::letter()              + "\n"
+        "  " + framework::settings::mixins::InputMixin::description()      + "\n"
+      "-" + framework::settings::mixins::OutputMixin::letter()             + "\n"
+        "  " + framework::settings::mixins::OutputMixin::description()     + "\n"
+      "-" + framework::settings::mixins::AddressMixin::letter()            + "\n"
+        "  " + framework::settings::mixins::AddressMixin::description()    + "\n"
+      "-" + framework::settings::mixins::PortMixin::letter()               + "\n"
+        "  " + framework::settings::mixins::PortMixin::description()       + "\n"
+      "-" + framework::settings::mixins::BufferSizeMixin::letter()         + "\n"
+        "  " + framework::settings::mixins::BufferSizeMixin::description() + "\n";
+  }
 
-enum parseCommandLine_Result{
-  parseCommandLine_ok,
-  parseCommandLine_error,
-  parseCommandLine_exit,
-};
-parseCommandLine_Result parseCommandLine(int argc, char ** argv){
-  for (;;){
-    int c = getopt(argc, argv, "hm:a:p:");
-    if (c == -1)
-      break;
-    switch (c){
-      case 'h':
-        usage(cout);
-        return parseCommandLine_exit;
-      case 'm':
-        for (char * p = optarg; *p != '\0'; ++p)
-          *p = toupper(*p);
-        if (strcmp(optarg, "TCP") == 0)
-          socket_type = SOCK_STREAM;
-        else if (strcmp(optarg, "UDP") == 0)
-          socket_type = SOCK_DGRAM;
-        else{
-          cerr << "ERROR: Unknown mode: " << optarg << '\n';
-          usage(cerr);
-          return parseCommandLine_error;
-        }
-        break;
-      case 'a':
-        addr = optarg;
-        break;
-      case 'p':
-        port = optarg;
-        break;
-      case '?':
+  /* override */ virtual int handle(char letter, char * optarg){
+    int result;
+    if (letter == framework::settings::mixins::InputMixin::letter())
+      result = framework::settings::mixins::InputMixin::handle(optarg);
+    else if (letter == framework::settings::mixins::OutputMixin::letter())
+      result = framework::settings::mixins::OutputMixin::handle(optarg);
+    else if (letter == framework::settings::mixins::AddressMixin::letter())
+      result = framework::settings::mixins::AddressMixin::handle(optarg);
+    else if (letter == framework::settings::mixins::PortMixin::letter())
+      result = framework::settings::mixins::PortMixin::handle(optarg);
+    else if (letter == framework::settings::mixins::BufferSizeMixin::letter())
+      result = framework::settings::mixins::BufferSizeMixin::handle(optarg);
+    else
+      return 1;
+
+    switch(result){
+      case 0:
+        return 0;
+      case 1:
+        return 2;
+      case 2:
+        return 3;
       default:
-        cerr << "ERROR: Bad arguments\n";
-        usage(cerr);
-        return parseCommandLine_error;
+        assert(false);
+        return 3;
     }
   }
-  if (optind != argc){
-    cerr << "ERROR: Bad arguments\n";
-    usage(cerr);
-    return parseCommandLine_error;
+
+  /* override */ virtual bool validate(){
+    bool success = true;
+    if (!framework::settings::mixins::InputMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::InputMixin::letter() << "' is required.\n";
+    }
+    if (!framework::settings::mixins::OutputMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::OutputMixin::letter() << "' is required.\n";
+    }
+    if (!framework::settings::mixins::AddressMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::AddressMixin::letter() << "' is required.\n";
+    }
+    if (!framework::settings::mixins::PortMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::PortMixin::letter() << "' is required.\n";
+    }
+    if (!framework::settings::mixins::BufferSizeMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
+    }
+    return success;
   }
-  return parseCommandLine_ok;
-}
+};
 
-}
+typedef Settings SelectSettings;
 
-int main(int argc, char ** argv){
+struct SimpleSettings: public Settings{
 
-  switch (parseCommandLine(argc, argv)){
-    case parseCommandLine_ok:
-      break;
-    case parseCommandLine_error:
-      return 1;
-    case parseCommandLine_exit:
-      return 0;
-    default:
-      assert(false);
+  /* override */ virtual std::string options() const{
+    return Settings::options() +
+      framework::settings::mixins::SocketTypeMixin::option();
   }
+
+  /* override */ virtual std::string options_help() const{
+    return string() +
+      "-" + framework::settings::mixins::SocketTypeMixin::letter()         + "\n"
+        "  " + framework::settings::mixins::SocketTypeMixin::description() + "\n"
+      + Settings::options_help();
+  }
+
+  /* override */ virtual int handle(char letter, char * optarg){
+    int result = Settings::handle(letter, optarg);
+    if (result == 1){
+      if (letter == framework::settings::mixins::SocketTypeMixin::letter())
+        result = framework::settings::mixins::SocketTypeMixin::handle(optarg);
+    }
+    switch(result){
+      case 0:
+        return 0;
+      case 1:
+        return 2;
+      case 2:
+        return 3;
+      default:
+        assert(false);
+        return 3;
+    }
+  }
+
+  /* override */ virtual bool validate(){
+    bool success = true;
+    if (!framework::settings::mixins::SocketTypeMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::SocketTypeMixin::letter() << "' is required.\n";
+    }
+      /*
+       * Careful, Settings::validate() must fire even if success is already false.
+       */
+    success = Settings::validate() && success;
+    return success;
+  }
+};
+
+typedef vector<__int8_t> Buffer;
+typedef bool (*Handler)(Settings * settings, int s, Buffer & buffer);
+typedef framework::Framework<Handler> ThisFramework;
+
+bool invoke_handler(Handler handler, framework::settings::Base * settings_){
+  Settings * settings = static_cast<Settings *>(settings_);
+  bool ret = false;
 
   #ifdef WIN32
     WSADATA wsadata;
     if (WSAStartup(MAKEWORD(2, 2), &wsadata)){
       cerr << "ERROR: Could not initialize socket library\n";
-      return 1;
+      return false;
     }
   #endif
-  int ret = 1;
 
   addrinfo * res = 0;
   addrinfo * p = 0;
@@ -121,32 +166,53 @@ int main(int argc, char ** argv){
 
   addrinfo hints = {0};
   hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-  hints.ai_socktype = socket_type;
-  if (getaddrinfo(addr.c_str(), port.c_str(), &hints, &res) != 0){
+  hints.ai_socktype = settings->socket_type;
+  if (getaddrinfo(
+        settings->addr.c_str(),
+        settings->port.c_str(),
+        &hints, &res) != 0){
     cerr << "ERROR: Could not resolve IP address and/or port\n";
-    goto main_return;
-  }  
+    goto run_return;
+  }
 
   for(p = res; p != NULL; p = p->ai_next){
     s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (s == -1)
       continue;
     if (connect(s, p->ai_addr, p->ai_addrlen) == -1){
-      close(s), s = -1;
+      verify_ne(close(s), -1);
+      s = -1;
       continue;
     }
     break;
   }
   if (s == -1){
     cerr << "ERROR: Could not connect to server\n";
-    goto main_return;
+    goto run_return;
   }
 
-  __int8_t buf[BUFSIZE];
-  while (!cin.eof()){
+  {
+    Buffer buffer(settings->buffer_size);
+    ret = handler(settings, s, buffer);
+  }
 
-    cin.read(reinterpret_cast<char *>(buf), BUFSIZE / sizeof(char));
-    int count = cin.gcount() * sizeof(char);
+run_return:
+  if (res != 0)
+    freeaddrinfo(res);
+  if (s != -1)
+    verify_ne(close(s), -1);
+  return ret;
+}
+
+bool simple_handler(Settings * settings, int s, Buffer & buffer){
+  istream & input = settings->get_input();
+  ostream & output = settings->get_output();
+  __int8_t * const buf = &buffer[0];
+
+  while (!input.eof()){
+
+    input.read(reinterpret_cast<char *>(buf), settings->buffer_size / sizeof(char));
+    int count = input.gcount() * sizeof(char);
     if (count == 0)
       continue;
     cerr << "TRACE: " << count << " bytes to send\n";
@@ -156,7 +222,7 @@ int main(int argc, char ** argv){
       int sent_current = send(s, buf + sent_total, count - sent_total, 0);
       if (sent_current == -1){
         cerr << "ERROR: Encountered an error while sending data\n";
-        goto main_return;
+        return false;
       }
       cerr << "TRACE: " << sent_current << " bytes sent\n";
       sent_total += sent_current;
@@ -165,26 +231,107 @@ int main(int argc, char ** argv){
 
     int recv_total = 0;
     while (recv_total < count){
-      int recv_current = recv(s, buf + recv_total, BUFSIZE - recv_total, 0);
+      int recv_current = recv(s, buf + recv_total, settings->buffer_size - recv_total, 0);
       if (recv_current == -1){
         cerr << "ERROR: Encountered an error while reading data\n";
-        goto main_return;
+        return false;
       }
       if (recv_current == 0){
         cerr << "ERROR: Server shutdowned unexpectedly\n";
-        goto main_return;
+        return false;
       }
       cerr << "TRACE: Received " << recv_current << " bytes\n";
       recv_total += recv_current;
     }
-    cout.write(reinterpret_cast<char *>(buf), recv_total * sizeof(char));
+    output.write(reinterpret_cast<char *>(buf), recv_total * sizeof(char));
   }
+  return true;
+}
 
-  ret = 0;
-main_return:
-  if (res != 0)
-    freeaddrinfo(res);
-  if (s != -1)
-    close(s);
-  return ret;
+bool select_handler(Settings * settings, int s, Buffer & buffer){
+  istream & input = settings->get_input();
+  ostream & output = settings->get_output();
+  __int8_t * const buf = &buffer[0];
+
+  if (!try_setsockopt_sndlowat(s, settings->buffer_size))
+    return false;
+
+  bool stdin_eof = false;
+
+  fd_set rset, wset;
+  FD_ZERO(&rset);
+  FD_ZERO(&wset);
+
+  for (;;){
+    FD_SET(s, &rset);
+    if (!stdin_eof)
+      FD_SET(s, &wset);
+
+    cerr << "TRACE: calling select()\n";
+    int num_ready = select(s + 1, &rset, &wset, 0, 0);
+    if (num_ready == -1){
+      cerr << "ERROR: select() reported an error\n";
+      return false;
+    }
+
+    if (FD_ISSET(s, &rset)){
+      int received = recv(s, buf, settings->buffer_size, 0);
+      if (received == -1){
+        SOCKETS_PERROR("ERROR: Error when receiving");
+        return false;
+      }
+      else if (received == 0){
+        if (stdin_eof){
+          cerr << "TRACE: Server closed the connection\n";
+          return true;
+        }
+        else{
+          cerr << "ERROR: Server closed the connection unexpectedly\n";
+          return false;
+        }
+      }
+      else {
+        cerr << "TRACE: " << received << " bytes to print\n";
+        output.write(reinterpret_cast<char *>(buf), received * sizeof(char));
+        cerr << "TRACE: Bytes printed\n";
+      }
+    }
+
+    if (FD_ISSET(s, &wset)){
+      input.read(reinterpret_cast<char *>(buf), settings->buffer_size / sizeof(char));
+      int count = input.gcount() * sizeof(char);
+      if (count == 0){
+        cerr << "TRACE: EOF at standard input\n";
+        stdin_eof = true;
+        verify_ne(shutdown(s, SHUT_WR), -1);
+        FD_CLR(s, &wset);
+      }
+      else{
+        cerr << "TRACE: " << count << " bytes to send\n";
+
+        int sent = send(s, buf, count, 0);
+        if (sent == -1){
+          SOCKETS_PERROR("ERROR: Error when sending");
+          return false;
+        }
+        else{
+          assert(sent == count);
+          cerr << "TRACE: " << sent << " bytes sent\n";
+        }
+      }
+    }
+  }
+}
+
+} // namespace
+
+int main(int argc, char ** argv){
+  SimpleSettings simple_settings;
+  SelectSettings select_settings;
+  ThisFramework::Modes modes;
+  modes.push_back(ThisFramework::ModeDescription(
+    "simple", "Simple client.", &simple_settings, &simple_handler));
+  modes.push_back(ThisFramework::ModeDescription(
+    "select", "Client implemented using select() function.", &select_settings, &select_handler));
+  return ThisFramework::run("client", argc, argv, modes, invoke_handler) ? 0 : 1;
 }

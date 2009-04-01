@@ -17,16 +17,16 @@ Additional requirements for Unix-like machines:
 List of Programs
 ----------------
 
-============= ============= ========= ==========================
-Program Name  Server/Client Protocols Implementation details
-============= ============= ========= ==========================
-client        Client        TCP, UDP  none
-server        Server        TCP, UDP  none
-client_select Client        TCP       ``select()`` function used
-server_select Server        TCP       ``select()`` function used
-============= ============= ========= ==========================
+Client and server programs are called ``server`` and ``client``  respectively.
 
-All servers are interchangeable. And are the clients.
+Known vulnerabilities
+---------------------
+
+When you run ``server tcp`` passing limit option your server is vulnerable
+to DoS attacks as I did not consider timeouts useful in a test program.
+
+Modes using ``select()`` may work incorrectly on platforms where there is
+no way to set SO_SNDLOWAT socket option (e.g., on Windows and Linux).
 
 Feadback
 --------

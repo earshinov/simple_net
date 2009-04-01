@@ -30,7 +30,7 @@ If you use Windows and Visual Studio:
 
   mkdir build
   cd build
-  cmake -G <GENERATOR>
+  cmake -G <GENERATOR> ..
 
 Replace ``<GENERATOR>`` with appropriate Visual Studio projects' generator from `this list <http://www.cmake.org/cmake/help/cmake2.6docs.html#section_Generators>`_.
 

@@ -142,7 +142,7 @@
 char	*optarg;		// global argument pointer
 int		optind = 0; 	// global argv index
 
-int getopt(int argc, char *argv[], char *optstring)
+int getopt(int argc, char *argv[], const char *optstring)
 {
 	static char *next = NULL;
 	if (optind == 0)
@@ -178,7 +178,7 @@ int getopt(int argc, char *argv[], char *optstring)
 	}
 
 	char c = *next++;
-	char *cp = strchr(optstring, c);
+	const char *cp = strchr(optstring, c);
 
 	if (cp == NULL || c == ':')
 		return '?';

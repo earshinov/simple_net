@@ -10,6 +10,13 @@ if(UNIX)
   add_definitions(-DUNIX)
 endif(UNIX)
 
+if(CMAKE_BUILD_TYPE)
+  string(COMPARE EQUAL ${CMAKE_BUILD_TYPE} "Debug" DEBUG)
+  if(DEBUG)
+    add_definitions(-D_DEBUG)
+  endif(DEBUG)
+endif(CMAKE_BUILD_TYPE)
+
   #
   # The Eclipse CDT Error Parser cannot handle error messages that span more
   # than one line, which is the default gcc behavior. Force gcc to generate
@@ -18,17 +25,15 @@ endif(UNIX)
   # http://www.cmake.org/Wiki/CMake:Eclipse
   #
 if(CMAKE_COMPILER_IS_GNUCC)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fmessage-length=0")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -fmessage-length=0")
 endif(CMAKE_COMPILER_IS_GNUCC)
 if(CMAKE_COMPILER_IS_GNUCXX)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmessage-length=0")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fmessage-length=0")
 ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 add_subdirectory(common)
 add_subdirectory(client)
 add_subdirectory(server)
-add_subdirectory(client_select)
-add_subdirectory(server_select)
 
 if(WIN32)
   install(FILES
