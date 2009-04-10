@@ -14,6 +14,14 @@ if(CMAKE_BUILD_TYPE)
   string(COMPARE EQUAL ${CMAKE_BUILD_TYPE} "Debug" DEBUG)
   if(DEBUG)
     add_definitions(-D_DEBUG)
+
+    if(CMAKE_COMPILER_IS_GNUCC)
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+    endif(CMAKE_COMPILER_IS_GNUCC)
+    if(CMAKE_COMPILER_IS_GNUCXX)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+    endif(CMAKE_COMPILER_IS_GNUCXX)
+
   endif(DEBUG)
 endif(CMAKE_BUILD_TYPE)
 
@@ -29,7 +37,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 endif(CMAKE_COMPILER_IS_GNUCC)
 if(CMAKE_COMPILER_IS_GNUCXX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fmessage-length=0")
-ENDIF(CMAKE_COMPILER_IS_GNUCXX)
+endif(CMAKE_COMPILER_IS_GNUCXX)
 
 add_subdirectory(common)
 add_subdirectory(client)
