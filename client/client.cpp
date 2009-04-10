@@ -253,9 +253,6 @@ bool select_handler(Settings * settings, int s, Buffer & buffer){
   ostream & output = settings->get_output();
   __int8_t * const buf = &buffer[0];
 
-  if (!try_setsockopt_sndlowat(s, settings->buffer_size))
-    return false;
-
   bool stdin_eof = false;
 
   fd_set rset, wset;

@@ -1,16 +1,15 @@
 #include "../common/common.h"
 #include "../common/framework.h"
+
+#include <list>
 using namespace std;
 
 #ifdef UNIX
-  #include <fcntl.h>
 	#include <getopt.h>
 	#include <semaphore.h>
 	#include <signal.h>
 	#include <sys/wait.h>
 #endif
-
-const int CLIENTS_SIZE = FD_SETSIZE;
 
 namespace{
 
@@ -351,6 +350,85 @@ tcp_return:
   return false;
 }
 
+struct SelectClient{
+  SelectClient(int s_, int buffer_size): s(s_), buffer(buffer_size), rd_disabled(false){
+  }
+
+  int s;
+  ReadWriteBuffer buffer;
+  bool rd_disabled;
+};
+
+struct SelectClientFactory{
+  typedef list<SelectClient> SelectClients;
+  typedef SelectClients::iterator iterator;
+
+  iterator begin(){ return clients_.begin(); }
+  iterator end(){ return clients_.end(); }
+
+  SelectClientFactory(int buffer_size_, fd_set * rset_, fd_set * wset_, int * maxfd_):
+    clients_(), buffer_size(buffer_size_), rset(rset_), wset(wset_), maxfd(maxfd_), maxfd_min(*maxfd_){
+  }
+
+  void new_client(int s){
+    clients_.push_back(SelectClient(s, buffer_size));
+
+    FD_SET(s, rset);
+    if (*maxfd < s)
+      *maxfd = s;
+  }
+
+  void rd_advance(iterator iter, int count){
+    bool not_in_w = iter->buffer.snd_empty();
+
+    iter->buffer.rd_advance(count);
+    if (iter->buffer.rd_empty())
+      FD_CLR(iter->s, rset);
+    if (not_in_w)
+      FD_SET(iter->s, wset);
+  }
+
+  void snd_advance(iterator iter, int count){
+    bool not_in_r = iter->buffer.rd_empty();
+
+    iter->buffer.snd_advance(count);
+    if (iter->buffer.snd_empty())
+      FD_CLR(iter->s, wset);
+    if (not_in_r && !iter->buffer.rd_empty())
+      FD_SET(iter->s, rset);
+  }
+
+  void rd_disable(iterator iter){
+	iter->rd_disabled = true;
+	FD_CLR(iter->s, rset);
+  }
+
+  iterator delete_client(iterator iter){
+    FD_CLR(iter->s, rset);
+    FD_CLR(iter->s, wset);
+
+    verify_ne(close(iter->s), -1);
+    iter = clients_.erase(iter);
+
+    *maxfd = maxfd_min;
+    iterator begin_(begin());
+    const iterator end_(end());
+    for(; begin_ != end_; ++begin_)
+      if (begin_->s > *maxfd)
+        *maxfd = begin_->s;
+
+    return iter;
+  }
+
+private:
+  list<SelectClient> clients_;
+  int buffer_size;
+  fd_set * rset;
+  fd_set * wset;
+  int * maxfd;
+  int maxfd_min;
+};
+
 bool select_handler(Settings * settings, int s){
   if (listen(s, 5) == -1){
     cerr << "ERROR: Could not start listening\n";
@@ -358,110 +436,112 @@ bool select_handler(Settings * settings, int s){
   }
 
   /* See Stevens W.R. - "Unix Network Programming", chapter 15.6 */
-  #ifdef UNIX
-    {
-      int flags = fcntl(s, F_GETFL, 0);
-      assert(flags != -1);
-      verify_ne(fcntl(s, F_SETFL, flags | O_NONBLOCK), -1);
-    }
-  #endif
-  #ifdef WIN32
-    {
-      unsigned long val = 1;
-      verify_ne(ioctlsocket(s, FIONBIO, &val), -1);
-    }
-  #endif
+  verify_ne(setnonblocking(s), -1);
 
-  Buffer buffer(settings->buffer_size);
-  __int8_t * buf = &buffer[0];
-
-  int clients[CLIENTS_SIZE];
-  for (int i = 0; i < CLIENTS_SIZE; ++i)
-    clients[i] = -1;
-
-  if (!try_setsockopt_sndlowat(s, settings->buffer_size))
-    return false;
-
-  fd_set set;
-  FD_ZERO(&set);
-  FD_SET(s, &set);
+  fd_set xrset, xwset;
+  FD_ZERO(&xrset);
+  FD_ZERO(&xwset);
+  FD_SET(s, &xrset);
   int maxfd = s;
 
+  SelectClientFactory client_factory(settings->buffer_size, &xrset, &xwset, &maxfd);
+
   for (;;){
-    fd_set rset = set;
-    int num_ready = select(maxfd + 1, &rset, 0, 0, 0);
+    fd_set rset = xrset;
+    fd_set wset = xwset;
+    int num_ready = select(maxfd + 1, &rset, &wset, 0, 0);
 
     if (FD_ISSET(s, &rset)){
       --num_ready;
 
-      int i = 0;
-      for (; i < CLIENTS_SIZE && clients[i] != -1; ++i){
+      int c = accept(s, 0, 0);
+      if (c == -1){
+        /* See Stevens W.R. - "Unix Network Programming", chapter 15.6 */
+        #ifdef UNIX
+          if (errno != EWOULDBLOCK && errno != ECONNABORTED && errno != EPROTO && errno != EINTR){
+            cerr << "ERROR: Could not accept a connection\n";
+            return false;
+          }
+        #endif
+        #ifdef WIN32
+          if (WSAGetLastError() != WSAECONNRESET){
+            cerr << "ERROR: Could not accept a connection\n";
+            return false;
+          }
+        #endif
       }
-      if (i == CLIENTS_SIZE){
-        cerr << "TRACE: Do not accept new connection - too many clients\n";
-      }
-      else{
 
-        int c = accept(s, 0, 0);
-        if (c == -1){
-          /* See Stevens W.R. - "Unix Network Programming", chapter 15.6 */
-          #ifdef UNIX
-            if (errno != EWOULDBLOCK && errno != ECONNABORTED && errno != EPROTO && errno != EINTR){
-              cerr << "ERROR: Could not accept a connection\n";
-              return false;
-            }
-          #endif
-          #ifdef WIN32
-            if (WSAGetLastError() != WSAECONNRESET){
-              cerr << "ERROR: Could not accept a connection\n";
-              return false;
-            }
-          #endif
-        }
+        /*
+         * NONBLOCK option is not always inherited.
+         * E.g., it is not inherited in Linux.
+         * We want this socket to be non-blocking.
+         */
+      verify_ne(setnonblocking(c), -1);
 
-        clients[i] = c;
-
-        FD_SET(c, &set);
-        if (c > maxfd)
-          maxfd = c;
-      }
+      client_factory.new_client(c);
     }
 
-    for (int i = 0; num_ready > 0; ++i){
-      int c = clients[i];
-      if (c != -1 && FD_ISSET(c, &rset)) {
+    SelectClientFactory::iterator iter = client_factory.begin();
+    const SelectClientFactory::iterator end = client_factory.end();
+    while (num_ready > 0){
+      assert(iter != end);
+      int c = iter->s;
+
+      bool isrset = !!FD_ISSET(c, &rset);
+      bool iswset = !!FD_ISSET(c, &wset);
+
+        /*
+         * Decrease num_ready here in order not to code it each time we finish
+         * processing the socket prematurely. Note that one socket can reside
+         * in rset and wset simultaneously.
+         */
+      if (isrset)
+        --num_ready;
+      if (iswset)
         --num_ready;
 
-        int count = recv(c, buf, settings->buffer_size, 0);
+      if (isrset) {
+        int count = recv(c, &*(iter->buffer.rd_begin()), iter->buffer.rd_size(), 0);
         if (count == -1){
-          SOCKETS_PERROR("WARNING: Encountered an error while reading data");
+          SOCKETS_PERROR("WARNING: Encountered an error while reading data.");
+          iter = client_factory.delete_client(iter);
+          continue;
         }
         else if (count == 0){
-          cerr << "TRACE: Client shutdowned\n";
-        }
+          cerr << "TRACE: Client stopped sending data.\n";
 
-        if (count <= 0){
-          goto client_fail;
+		  if (iter->buffer.snd_size() == 0){
+			cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
+			client_factory.delete_client(iter);
+			continue;
+		  }
+		  else{
+			/* Do not close socket here as there are something to send. */
+			client_factory.rd_disable(iter);
+		  }
         }
-        else{
-
-          int sent_total = 0;
-          while (sent_total < count){
-            int sent_current = send(c, buf + sent_total, count - sent_total, 0);
-            if (sent_current == -1){
-              SOCKETS_PERROR("WARNING: Encountered an error while sending data");
-              goto client_fail;
-            }
-            sent_total += sent_current;
-          }
-        }
-
-        continue;
-client_fail:
-        close(c);
-        clients[i] = -1;
-        FD_CLR(c, &set);
+        else
+          client_factory.rd_advance(iter, count);
       }
+
+      if (iswset) {
+        int count = send(c, &*(iter->buffer.snd_begin()), iter->buffer.snd_size(), 0);
+        if (count == -1){
+		  SOCKETS_PERROR("WARNING: Encountered an error while sending data.");
+          iter = client_factory.delete_client(iter);
+          continue;
+        }
+		else{
+          client_factory.snd_advance(iter, count);
+		  if (iter->rd_disabled && iter->buffer.empty()){
+			cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
+			iter = client_factory.delete_client(iter);
+			continue;
+		  }
+		}
+      }
+
+      ++iter;
     }
   }
 }

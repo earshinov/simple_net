@@ -4,14 +4,16 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <vector>
 
 #ifdef WIN32
   #include <winsock2.h>
   #include <ws2tcpip.h>
 #else
   #include <cerrno>
-  #include <sys/socket.h>
+  #include <fcntl.h>
   #include <netdb.h>
+  #include <sys/socket.h>
 #endif
 
 /* Miscellaneous defines */
@@ -42,6 +44,16 @@
   inline int setsockopt_(int s, int level, int optname, const void *optval, socklen_t optlen){
     return setsockopt(s, level, optname, static_cast<const char *>(optval), optlen);
   }
+
+  inline int setnonblocking(int s){
+    unsigned long val = 1;
+    return ioctlsocket(s, FIONBIO, &val);
+  }
+  inline int setblocking(int s){
+    unsigned long val = 0;
+    return ioctlsocket(s, FIONBIO, &val);
+  }
+
   inline int close(int s){
     return closesocket(s);
   }
@@ -58,72 +70,18 @@
   inline int setsockopt_(int s, int level, int optname, const void *optval, socklen_t optlen){
     return setsockopt(s, level, optname, optval, optlen);
   }
+
+  inline int setnonblocking(int s){
+    int flags = fcntl(s, F_GETFL, 0);
+    assert(flags != -1);
+    return fcntl(s, F_SETFL, flags | O_NONBLOCK);
+  }
+  inline int setblocking(int s){
+    int flags = fcntl(s, F_GETFL, 0);
+    assert(flags != -1);
+    return fcntl(s, F_SETFL, flags & ~O_NONBLOCK);
+  }
 #endif
-
-/* Some socket functions common to clients and servers */
-
-inline bool try_setsockopt_sndlowat(int s, int buffer_size){
-
-  /*
-   * TODO:
-   *
-   * Problem
-   * -------
-   *
-   * On Linux SO_SNDLOWAT can not be set, but can be get, and
-   * the value is 1. That is, if our buffer size is greater than 1 (and it
-   * mostly is, because we have awful performance using such a small buffer)
-   * we can not be sure that send() function won't block when we call it
-   * after accept() returned the socket descriptor in write FD_SET.
-   *
-   * Same problem on Windows (we can not even get SO_SNDLOWAT value there).
-   *
-   * Solution
-   * --------
-   *
-   *   1. make socket non-blocking;
-   *   2. if the EWOULDBLOCK error occurs when calling send(),
-   *      save the unsent part of the buffer;
-   *   3. do not pass our read FDSET to accept() until the buffer is all sent.
-   *
-   * More efficient solution is described in the "UNIX Network Programming" book
-   * (to be precise, in chapter 15.2 describing non-blocking IO).
-   * But with that solution we won't need select() at all ^-)
-   *
-   * State of work
-   * -------------
-   *
-   * I don't want to do it because implementation of the solution is tedious.
-   */
-
-  /*
-  if (setsockopt_(s, SOL_SOCKET, SO_SNDLOWAT, &buffer_size, sizeof(buffer_size)) != -1)
-    return true;
-  assert(SOCKETS_ERRNO == SOCKETS_ERROR(ENOPROTOOPT));
-
-  int max_buffer_size = 0;
-  socklen_t len = sizeof(max_buffer_size);
-  bool success = getsockopt_(s, SOL_SOCKET, SO_SNDLOWAT, &max_buffer_size, &len) != -1;
-  assert(len == sizeof(max_buffer_size));
-
-  if (success){
-    if (buffer_size > max_buffer_size){
-      std::cerr <<
-        "ERROR: Can not set so large buffer size. It must not exceed SO_SNDLOWAT socket\n"
-        "  option equal to " << max_buffer_size << " on this platform.\n";
-      return false;
-    }
-  }
-  else{
-    assert(SOCKETS_ERRNO == SOCKETS_ERROR(ENOPROTOOPT));
-    std::cerr <<
-      "WARNING: Could not set SO_SNDLOWAT socket option. Program may work incorrectly\n"
-      "  if you set large buffer size with -b command line option.\n";
-  }
-  */
-
-  return true;
-}
 
 /* Getopt defines */
 
@@ -170,3 +128,76 @@ Target lexical_cast(Source const & arg){
 
   /* TODO: Add optimized specialized versions if needed */
 }
+
+/* Read-write buffer */
+
+class ReadWriteBuffer{
+public:
+  typedef std::vector<__int8_t>::iterator iterator;
+
+  ReadWriteBuffer(int buffer_size):
+    buffer_(buffer_size),
+	begin_(buffer_.begin()),
+    end_(buffer_.end()),
+    snd_(begin_),
+	rd_(begin_){
+  }
+
+  ReadWriteBuffer(const ReadWriteBuffer & other):
+    buffer_(other.buffer_),
+	begin_(buffer_.begin()),
+	end_(buffer_.end()),
+	snd_(begin_ + (other.snd_ - other.begin_)),
+	rd_(begin_ + (other.rd_ - other.begin_)){
+  }
+
+  bool empty() const{
+    return snd_ == begin_ && rd_ == begin_;
+  }
+
+  iterator rd_begin(){
+    return rd_;
+  }
+  iterator rd_end(){
+    return end_;
+  }
+  size_t rd_size() const{
+    return end_ - rd_;
+  }
+  bool rd_empty() const{
+    return rd_ == end_;
+  }
+  void rd_advance(int distance){
+    assert(distance >= 0);
+    rd_ += distance;
+    assert(rd_ <= end_);
+  }
+
+  iterator snd_begin(){
+    return snd_;
+  }
+  iterator snd_end(){
+    return rd_;
+  }
+  size_t snd_size() const{
+    return rd_ - snd_;
+  }
+  bool snd_empty() const{
+    return snd_ == rd_;
+  }
+  void snd_advance(int distance){
+    assert(distance >= 0);
+    snd_ += distance;
+    assert(snd_ <= rd_);
+
+    if (snd_ == rd_)
+      rd_ = snd_ = begin_;
+  }
+
+private:
+  std::vector<__int8_t> buffer_;
+  const iterator begin_;
+  const iterator end_;
+  iterator snd_;
+  iterator rd_;
+};
