@@ -3,6 +3,7 @@
 #include "common.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 
@@ -193,7 +194,8 @@ namespace framework {
         }
       };
 
-      struct InputMixin: public Base {
+        /* Conflicts with CIoInputMixin. */
+      struct CxxIoInputMixin: public Base {
         char letter() const { return 'i'; }
         std::string option() const { return "i:"; }
         std::string description() const { return "Input file name. Default: use standard input."; }
@@ -222,7 +224,8 @@ namespace framework {
         }
       };
 
-      struct OutputMixin: public Base {
+        /* Conflicts with CIoOutputMixin. */
+      struct CxxIoOutputMixin: public Base {
         char letter() const { return 'o'; }
         std::string option() const { return "o:"; }
         std::string description() const { return "Output file name. Default: use standard output."; }
@@ -251,6 +254,86 @@ namespace framework {
         }
       };
 
+        /* Conflicts with CxxIoInputMixin. */
+      struct CIoInputMixin: public Base {
+        CIoInputMixin(): input(NULL){
+        }
+        ~CIoInputMixin(){
+          if (input != NULL)
+            verify_e(fclose(input), 0);
+        }
+
+        char letter() const { return 'i'; }
+        std::string option() const { return "i:"; }
+        std::string description() const { return "Input file name. Default: use standard input."; }
+
+        FILE * input;
+        private:
+          bool set(const char * filename) {
+            if (input != NULL)
+              verify_e(fclose(input), 0);
+
+            input = fopen(filename, "rb");
+            return input != NULL;
+          }
+        public:
+
+        FILE * get_input() const {
+          if (input != NULL)
+            return input;
+          else
+            return stdin;
+        }
+
+        int handle(char * optarg){
+          if (!set(optarg)){
+            std::cerr << "ERROR: Could not open input file: " << optarg << '\n';
+            return 1;
+          }
+          return 0;
+        }
+      };
+
+        /* Conflicts with CxxIoOutputMixin. */
+      struct CIoOutputMixin: public Base {
+        CIoOutputMixin(): output(NULL){
+        }
+        ~CIoOutputMixin(){
+          if (output != NULL)
+            verify_e(fclose(output), 0);
+        }
+
+        char letter() const { return 'o'; }
+        std::string option() const { return "o:"; }
+        std::string description() const { return "Output file name. Default: use standard output."; }
+
+        FILE * output;
+        private:
+        bool set(const char * filename) {
+          if (output != NULL)
+            verify_e(fclose(output), 0);
+
+          output = fopen(filename, "wb");
+          return output != NULL;
+        }
+        public:
+
+        FILE * get_output() const {
+          if (output != NULL)
+            return output;
+          else
+            return stdout;
+        }
+
+        int handle(char * optarg){
+          if (!set(optarg)){
+            std::cerr << "ERROR: Could not open output file: " << optarg << '\n';
+            return 1;
+          }
+          return 0;
+        }
+      };
+
     } // namespace mixins
 
   } // namespace settings
@@ -262,19 +345,40 @@ namespace framework {
   template <typename TModeData> struct Framework {
 
     struct ModeDescription{
+
       ModeDescription(
         const std::string & name_,
         const std::string & short_description_,
         settings::Base * stgs_,
         TModeData data_):
 
-        name(name_),
+        names(),
+        short_description(short_description_),
+        stgs(stgs_),
+        data(data_){
+
+        names.push_back(name_);
+      }
+
+      ModeDescription(
+          /*
+           * Do not use, because sort order may be important
+           * (this is the order how mode names are presented to user in help).
+           */
+        const std::vector<std::string> & names_,
+
+        const std::string & short_description_,
+        settings::Base * stgs_,
+        TModeData data_):
+
+          /* FIXME: copying of vector */
+        names(names_),
         short_description(short_description_),
         stgs(stgs_),
         data(data_){
       }
 
-      std::string name;
+      std::vector<std::string> names;
       std::string short_description;
       settings::Base * stgs;
       TModeData data;
@@ -350,8 +454,18 @@ namespace framework {
 
       typename Modes::const_iterator it = modes.begin();
       const typename Modes::const_iterator end = modes.end();
-      for(; it != end; ++it)
-        o << it->name << "\n  " << it->short_description << '\n';
+      for(; it != end; ++it){
+        std::vector<std::string>::const_iterator it2 = it->names.begin();
+        const std::vector<std::string>::const_iterator end2 = it->names.end();
+
+        assert(it2 != end2);
+        o << *it2++;
+
+        for(; it2 != end2; ++it2)
+          o << ", " << *it2;
+
+        o << "\n  " << it->short_description << '\n';
+      }
 
       o << "\n"
            "In order to get more information about particular mode, type\n"
@@ -363,7 +477,26 @@ namespace framework {
       const std::string & executable_name,
       const ModeDescription & mode){
 
-      o << "Usage: " << executable_name << ' ' << mode.name << " OPTIONS\n"
+      o << "Usage: " << executable_name << ' ';
+
+      if (mode.names.size() == 1)
+        o << mode.names[0];
+      else{
+        o << '{';
+
+        std::vector<std::string>::const_iterator it = mode.names.begin();
+        const std::vector<std::string>::const_iterator end = mode.names.end();
+
+        assert(it != end);
+        o << *it++;
+
+        for(; it != end; ++it)
+          o << ", " << *it;
+
+        o << '}';
+      }
+
+      o << " OPTIONS\n"
            "\n"
            "Options:\n"
            "\n"
@@ -403,7 +536,7 @@ namespace framework {
       {
         const typename Modes::const_iterator end = modes.end();
         for (; it != end; ++it)
-          if (it->name == mode_name)
+          if (std::find(it->names.begin(), it->names.end(), mode_name) != it->names.end())
             break;
         if (it == end){
           std::cerr << "ERROR: Unknown mode: " << mode_name << '\n';
