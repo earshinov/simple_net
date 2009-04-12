@@ -14,6 +14,7 @@
   #include <fcntl.h>
   #include <netdb.h>
   #include <sys/socket.h>
+  #include <unistd.h>
 #endif
 
 /* Miscellaneous defines */
@@ -29,6 +30,33 @@
 
 /* Socket function defines */
 
+#ifdef UNIX
+  #define SOCKETS_ERRNO errno
+  #define SOCKETS_ERROR(error) error
+  inline void SOCKETS_PERROR(const char * s){ return perror(s); }
+
+  inline int getsockopt_(int s, int level, int optname, void * optval, socklen_t * optlen){
+    return getsockopt(s, level, optname, optval, optlen);
+  }
+  inline int setsockopt_(int s, int level, int optname, const void *optval, socklen_t optlen){
+    return setsockopt(s, level, optname, optval, optlen);
+  }
+
+  inline int setnonblocking(int s){
+    int flags = fcntl(s, F_GETFL, 0);
+    assert(flags != -1);
+    return fcntl(s, F_SETFL, flags | O_NONBLOCK);
+  }
+  inline int setblocking(int s){
+    int flags = fcntl(s, F_GETFL, 0);
+    assert(flags != -1);
+    return fcntl(s, F_SETFL, flags & ~O_NONBLOCK);
+  }
+
+  inline void sleep_(__uint8_t seconds){
+    sleep(seconds);
+  }
+#endif
 #ifdef WIN32
   #define SOCKETS_ERRNO WSAGetLastError()
   #define SOCKETS_ERROR(error) WSA##error
@@ -58,29 +86,11 @@
     return closesocket(s);
   }
 
+  inline void sleep_(unsigned __int8_t seconds){
+	return Sleep(seconds * 1000);
+  }
+
   #define SHUT_WR SD_SEND
-#else
-  #define SOCKETS_ERRNO errno
-  #define SOCKETS_ERROR(error) error
-  inline void SOCKETS_PERROR(const char * s){ return perror(s); }
-
-  inline int getsockopt_(int s, int level, int optname, void * optval, socklen_t * optlen){
-    return getsockopt(s, level, optname, optval, optlen);
-  }
-  inline int setsockopt_(int s, int level, int optname, const void *optval, socklen_t optlen){
-    return setsockopt(s, level, optname, optval, optlen);
-  }
-
-  inline int setnonblocking(int s){
-    int flags = fcntl(s, F_GETFL, 0);
-    assert(flags != -1);
-    return fcntl(s, F_SETFL, flags | O_NONBLOCK);
-  }
-  inline int setblocking(int s){
-    int flags = fcntl(s, F_GETFL, 0);
-    assert(flags != -1);
-    return fcntl(s, F_SETFL, flags & ~O_NONBLOCK);
-  }
 #endif
 
 /* Getopt defines */

@@ -5,10 +5,10 @@
 using namespace std;
 
 #ifdef UNIX
-	#include <getopt.h>
-	#include <semaphore.h>
-	#include <signal.h>
-	#include <sys/wait.h>
+  #include <getopt.h>
+  #include <semaphore.h>
+  #include <signal.h>
+  #include <sys/wait.h>
 #endif
 
 namespace{
@@ -102,7 +102,7 @@ struct LimitMixin: public framework::settings::mixins::Base {
   int handle(char * optarg){
     int t;
     if (!dirty_lexical_cast::lexical_cast_ref(optarg, t) || t <= 0){
-      cerr << "ERROR: Limit is not correct\n";
+      cerr << "ERROR: Limit is not correct.\n";
       return 1;
     }
     limit = t;
@@ -130,18 +130,23 @@ struct TcpSettings:
     if (result == 1){
       if (letter == LimitMixin::letter())
         result = LimitMixin::handle(optarg);
+      else
+        return result;
+
+      switch(result){
+        case 0:
+          return 0;
+        case 1:
+          return 2;
+        case 2:
+          return 3;
+        default:
+          assert(false);
+          return 3;
+      }
     }
-    switch(result){
-      case 0:
-        return 0;
-      case 1:
-        return 2;
-      case 2:
-        return 3;
-      default:
-        assert(false);
-        return 3;
-    }
+    else
+      return result;
   }
 
   /* override */ virtual bool validate(){
@@ -171,8 +176,8 @@ bool udp_handler(Settings * settings, int s){
   __int8_t * buf = &buffer[0];
 
   for (;;){
-      /* sockaddr_storage matches the size of the largest struct that can be returned
-       *
+      /*
+       * sockaddr_storage matches the size of the largest struct that can be returned
        */
     sockaddr_storage addr;
     socklen_t addr_len = sizeof(addr);
@@ -180,11 +185,7 @@ bool udp_handler(Settings * settings, int s){
     int count = recvfrom(s, buf, settings->buffer_size, 0,
       reinterpret_cast<sockaddr *>(&addr), &addr_len);
     if (count == -1){
-      cerr << "WARNING: Encountered an error while reading data\n";
-      continue;
-    }
-    if (count == 0){
-      cerr << "NOTE: Client shutdowned\n";
+      SOCKETS_PERROR("WARNING: recvfrom");
       continue;
     }
 
@@ -193,7 +194,7 @@ bool udp_handler(Settings * settings, int s){
       int sent_current = sendto(s, buf + sent_total, count - sent_total, 0,
         reinterpret_cast<sockaddr *>(&addr), addr_len);
       if (sent_current == -1){
-        cerr << "WARNING: Encountered an error while sending data\n";
+        SOCKETS_PERROR("WARNING: sendto");
         break;
       }
       sent_total += sent_current;
@@ -239,11 +240,11 @@ void sig_chld(int signal){
   for (;;){
     int count = recv(c, buf, buffer_size, 0);
     if (count == -1){
-      cerr << "WARNING: Encountered an error while reading data\n";
+      SOCKETS_PERROR("WARNING: recv");
       goto subprocess_return;
     }
     if (count == 0){
-      cerr << "NOTE: Client shutdowned\n";
+      cerr << "TRACE: Client shutdowned.\n";
       goto subprocess_return;
     }
 
@@ -251,7 +252,7 @@ void sig_chld(int signal){
     while (sent_total < count){
       int sent_current = send(c, buf + sent_total, count - sent_total, 0);
       if (sent_current == -1){
-        cerr << "WARNING: Encountered an error while sending data\n";
+        SOCKETS_PERROR("WARNING: send");
         goto subprocess_return;
       }
       sent_total += sent_current;
@@ -271,7 +272,7 @@ bool tcp_handler(Settings * settings_, int s){
   #ifdef UNIX
     limit = settings->limit;
     if (signal(SIGCHLD, sig_chld) == SIG_ERR){
-      cerr << "ERROR: Could not bind SIGCHLD handler\n";
+      cerr << "ERROR: Could not bind SIGCHLD handler.\n";
       return false;
     }
   #endif
@@ -279,7 +280,7 @@ bool tcp_handler(Settings * settings_, int s){
   #ifdef UNIX
     if (settings->limit != 0){
       if (sem_init(&sem, 0 /* not shared */, settings->limit) == -1){
-        cerr << "ERROR: Could not apply limit\n";
+        cerr << "ERROR: Could not apply limit.\n";
         return false;
       }
     }
@@ -289,14 +290,14 @@ bool tcp_handler(Settings * settings_, int s){
     if (settings->limit != 0){
       sem = CreateSemaphore(0, settings->limit, settings->limit, 0);
       if (!sem){
-        cerr << "ERROR: Could not apply limit\n";
+        cerr << "ERROR: Could not apply limit.\n";
         return false;
       }
     }
   #endif
 
   if (listen(s, 5) == -1){
-    cerr << "ERROR: Could not start listening\n";
+    SOCKETS_PERROR("ERROR: listen");
     goto tcp_return;
   }
 
@@ -313,7 +314,7 @@ bool tcp_handler(Settings * settings_, int s){
 
     int c = accept(s, 0, 0); /* Socket bound to this connection */
     if (c == -1){
-      cerr << "ERROR: Could not accept a connection\n";
+      SOCKETS_PERROR("ERROR: accept");
       goto tcp_return;
     }
 
@@ -334,7 +335,7 @@ bool tcp_handler(Settings * settings_, int s){
       data->sem = sem;
       data->c = c;
       data->buffer_size = settings->buffer_size;
-      CreateThread(0, 0, tcp_subprocess, data, 0, 0);
+      CloseHandle(CreateThread(0, 0, tcp_subprocess, data, 0, 0));
     #endif
   }
 
@@ -399,8 +400,8 @@ struct SelectClientFactory{
   }
 
   void rd_disable(iterator iter){
-	iter->rd_disabled = true;
-	FD_CLR(iter->s, rset);
+  iter->rd_disabled = true;
+  FD_CLR(iter->s, rset);
   }
 
   iterator delete_client(iterator iter){
@@ -431,7 +432,7 @@ private:
 
 bool select_handler(Settings * settings, int s){
   if (listen(s, 5) == -1){
-    cerr << "ERROR: Could not start listening\n";
+    SOCKETS_PERROR("ERROR: listen");
     return false;
   }
 
@@ -459,16 +460,13 @@ bool select_handler(Settings * settings, int s){
         /* See Stevens W.R. - "Unix Network Programming", chapter 15.6 */
         #ifdef UNIX
           if (errno != EWOULDBLOCK && errno != ECONNABORTED && errno != EPROTO && errno != EINTR){
-            cerr << "ERROR: Could not accept a connection\n";
-            return false;
-          }
         #endif
         #ifdef WIN32
           if (WSAGetLastError() != WSAECONNRESET){
-            cerr << "ERROR: Could not accept a connection\n";
+        #endif
+            SOCKETS_PERROR("ERROR: accept");
             return false;
           }
-        #endif
       }
 
         /*
@@ -503,22 +501,22 @@ bool select_handler(Settings * settings, int s){
       if (isrset) {
         int count = recv(c, &*(iter->buffer.rd_begin()), iter->buffer.rd_size(), 0);
         if (count == -1){
-          SOCKETS_PERROR("WARNING: Encountered an error while reading data.");
+          SOCKETS_PERROR("WARNING: recv");
           iter = client_factory.delete_client(iter);
           continue;
         }
         else if (count == 0){
           cerr << "TRACE: Client stopped sending data.\n";
 
-		  if (iter->buffer.snd_size() == 0){
-			cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
-			client_factory.delete_client(iter);
-			continue;
-		  }
-		  else{
-			/* Do not close socket here as there are something to send. */
-			client_factory.rd_disable(iter);
-		  }
+          if (iter->buffer.snd_size() == 0){
+            cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
+            client_factory.delete_client(iter);
+            continue;
+          }
+          else{
+            /* Do not close socket here as there are something to send. */
+            client_factory.rd_disable(iter);
+          }
         }
         else
           client_factory.rd_advance(iter, count);
@@ -527,18 +525,18 @@ bool select_handler(Settings * settings, int s){
       if (iswset) {
         int count = send(c, &*(iter->buffer.snd_begin()), iter->buffer.snd_size(), 0);
         if (count == -1){
-		  SOCKETS_PERROR("WARNING: Encountered an error while sending data.");
+          SOCKETS_PERROR("WARNING: send");
           iter = client_factory.delete_client(iter);
           continue;
         }
-		else{
+        else{
           client_factory.snd_advance(iter, count);
-		  if (iter->rd_disabled && iter->buffer.empty()){
-			cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
-			iter = client_factory.delete_client(iter);
-			continue;
-		  }
-		}
+          if (iter->rd_disabled && iter->buffer.empty()){
+            cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
+            iter = client_factory.delete_client(iter);
+            continue;
+          }
+        }
       }
 
       ++iter;
@@ -552,7 +550,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
   #ifdef WIN32
     WSADATA wsadata;
     if (WSAStartup(MAKEWORD(2, 2), &wsadata)){
-      cerr << "ERROR: Could not initialize socket library\n";
+      cerr << "ERROR: Could not initialize socket library.\n";
       return false;
     }
   #endif
@@ -561,7 +559,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
   if (s == -1){
     s = socket(PF_INET, settings->socket_type, 0);
     if (s == -1){
-      cerr << "ERROR: Could not create socket\n";
+      SOCKETS_PERROR("ERROR: socket");
       goto run_return;
     }
     else{
@@ -572,7 +570,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
       addr.sin_port = htons(settings->port);
       addr.sin_addr.s_addr = INADDR_ANY;
       if (bind(s, (sockaddr *)&addr, sizeof(addr)) == -1){
-        cerr << "ERROR: Could not bind socket\n";
+        SOCKETS_PERROR("ERROR: bind");
         goto run_return;
       }
     }
@@ -586,7 +584,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
     addr.sin6_port = htons(settings->port);
     addr.sin6_addr = in6addr_any;
     if (bind(s, (sockaddr *)&addr, sizeof(addr)) == -1){
-      cerr << "ERROR: Could not bind socket\n";
+      SOCKETS_PERROR("ERROR: bind");
       goto run_return;
     }
   }

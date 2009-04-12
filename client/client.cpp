@@ -2,6 +2,10 @@
 #include "../common/framework.h"
 using namespace std;
 
+#ifdef UNIX
+  #include <sys/wait.h>
+#endif
+
 namespace{
 
 struct Settings:
@@ -102,18 +106,23 @@ struct CxxIoSettings:
         result = framework::settings::mixins::CxxIoInputMixin::handle(optarg);
       else if (letter == framework::settings::mixins::CxxIoOutputMixin::letter())
         result = framework::settings::mixins::CxxIoOutputMixin::handle(optarg);
+      else
+        return result;
+
+      switch(result){
+        case 0:
+          return 0;
+        case 1:
+          return 2;
+        case 2:
+          return 3;
+        default:
+          assert(false);
+          return 3;
+      }
     }
-    switch(result){
-      case 0:
-        return 0;
-      case 1:
-        return 2;
-      case 2:
-        return 3;
-      default:
-        assert(false);
-        return 3;
-    }
+    else
+      return result;
   }
 
   /* override */ virtual bool validate(){
@@ -161,18 +170,23 @@ struct CIoSettings:
         result = framework::settings::mixins::CIoInputMixin::handle(optarg);
       else if (letter == framework::settings::mixins::CIoOutputMixin::letter())
         result = framework::settings::mixins::CIoOutputMixin::handle(optarg);
+      else
+        return result;
+
+      switch(result){
+        case 0:
+          return 0;
+        case 1:
+          return 2;
+        case 2:
+          return 3;
+        default:
+          assert(false);
+          return 3;
+      }
     }
-    switch(result){
-      case 0:
-        return 0;
-      case 1:
-        return 2;
-      case 2:
-        return 3;
-      default:
-        assert(false);
-        return 3;
-    }
+    else
+      return result;
   }
 
   /* override */ virtual bool validate(){
@@ -196,7 +210,7 @@ struct CIoSettings:
 typedef CxxIoSettings SelectWindowsSettings;
 typedef CIoSettings SelectUnixSettings;
 
-struct SimpleSettings: public CxxIoSettings{
+struct MultiprotoSettings: public CxxIoSettings{
 
   /* override */ virtual std::string options() const{
     return CxxIoSettings::options() +
@@ -215,18 +229,23 @@ struct SimpleSettings: public CxxIoSettings{
     if (result == 1){
       if (letter == framework::settings::mixins::SocketTypeMixin::letter())
         result = framework::settings::mixins::SocketTypeMixin::handle(optarg);
+      else
+        return result;
+
+      switch(result){
+        case 0:
+          return 0;
+        case 1:
+          return 2;
+        case 2:
+          return 3;
+        default:
+          assert(false);
+          return 3;
+      }
     }
-    switch(result){
-      case 0:
-        return 0;
-      case 1:
-        return 2;
-      case 2:
-        return 3;
-      default:
-        assert(false);
-        return 3;
-    }
+    else
+      return result;
   }
 
   /* override */ virtual bool validate(){
@@ -243,6 +262,9 @@ struct SimpleSettings: public CxxIoSettings{
   }
 };
 
+typedef MultiprotoSettings SimpleSettings, MtSettings;
+
+
 typedef vector<__int8_t> Buffer;
 typedef bool (*Handler)(Settings * settings, int s);
 typedef framework::Framework<Handler> ThisFramework;
@@ -254,7 +276,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
   #ifdef WIN32
     WSADATA wsadata;
     if (WSAStartup(MAKEWORD(2, 2), &wsadata)){
-      cerr << "ERROR: Could not initialize socket library\n";
+      cerr << "ERROR: Could not initialize socket library.\n";
       return false;
     }
   #endif
@@ -270,7 +292,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
         settings->addr.c_str(),
         settings->port.c_str(),
         &hints, &res) != 0){
-    cerr << "ERROR: Could not resolve IP address and/or port\n";
+    cerr << "ERROR: Could not resolve IP address and/or port.\n";
     goto run_return;
   }
 
@@ -286,7 +308,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
     break;
   }
   if (s == -1){
-    cerr << "ERROR: Could not connect to server\n";
+    cerr << "ERROR: Could not connect to server.\n";
     goto run_return;
   }
 
@@ -314,35 +336,35 @@ bool simple_handler(Settings * settings_, int s){
     int count = input.gcount() * sizeof(char);
     if (count == 0)
       continue;
-    cerr << "TRACE: " << count << " bytes to send\n";
+    cerr << "TRACE: " << count << " bytes to send.\n";
 
     int sent_total = 0;
     while (sent_total < count){
       int sent_current = send(s, buf + sent_total, count - sent_total, 0);
       if (sent_current == -1){
-        cerr << "ERROR: Encountered an error while sending data\n";
+        SOCKETS_PERROR("ERROR: send");
         return false;
       }
-      cerr << "TRACE: " << sent_current << " bytes sent\n";
+      cerr << "TRACE: " << sent_current << " bytes sent.\n";
       sent_total += sent_current;
     }
-    cerr << "TRACE: Start receiving\n";
+    cerr << "TRACE: Start receiving.\n";
 
     int recv_total = 0;
     while (recv_total < count){
       int recv_current = recv(s, buf + recv_total, settings->buffer_size - recv_total, 0);
       if (recv_current == -1){
-        cerr << "ERROR: Encountered an error while reading data\n";
+        SOCKETS_PERROR("ERROR: recv");
         return false;
       }
       if (recv_current == 0){
-        cerr << "ERROR: Server shutdowned unexpectedly\n";
+        cerr << "ERROR: Server shutdowned unexpectedly.\n";
         return false;
       }
-      cerr << "TRACE: Received " << recv_current << " bytes\n";
+      cerr << "TRACE: Received " << recv_current << " bytes.\n";
       recv_total += recv_current;
     }
-    output.write(reinterpret_cast<char *>(buf), recv_total * sizeof(char));
+    output.write(reinterpret_cast<char *>(buf), recv_total);
   }
   return true;
 }
@@ -367,33 +389,32 @@ bool select_windows_handler(Settings * settings_, int s){
     if (!stdin_eof)
       FD_SET(s, &wset);
 
-    cerr << "TRACE: calling select()\n";
     int num_ready = select(s + 1, &rset, &wset, 0, 0);
     if (num_ready == -1){
-      cerr << "ERROR: select() reported an error\n";
+      cerr << "ERROR: select() reported an error.\n";
       return false;
     }
 
     if (FD_ISSET(s, &rset)){
       int received = recv(s, buf, settings->buffer_size, 0);
       if (received == -1){
-        SOCKETS_PERROR("ERROR: Error when receiving");
+        SOCKETS_PERROR("ERROR: recv");
         return false;
       }
       else if (received == 0){
         if (stdin_eof){
-          cerr << "TRACE: Server closed the connection\n";
+          cerr << "TRACE: Server closed the connection.\n";
           return true;
         }
         else{
-          cerr << "ERROR: Server closed the connection unexpectedly\n";
+          cerr << "ERROR: Server closed the connection unexpectedly.\n";
           return false;
         }
       }
       else {
-        cerr << "TRACE: " << received << " bytes to print\n";
-        output.write(reinterpret_cast<char *>(buf), received * sizeof(char));
-        cerr << "TRACE: Bytes printed\n";
+        cerr << "TRACE: " << received << " bytes to print.\n";
+        output.write(reinterpret_cast<char *>(buf), received);
+        cerr << "TRACE: Bytes printed.\n";
       }
     }
 
@@ -401,22 +422,22 @@ bool select_windows_handler(Settings * settings_, int s){
       input.read(reinterpret_cast<char *>(buf), settings->buffer_size / sizeof(char));
       int count = input.gcount() * sizeof(char);
       if (count == 0){
-        cerr << "TRACE: EOF at standard input\n";
+        cerr << "TRACE: EOF at input.\n";
         stdin_eof = true;
         verify_ne(shutdown(s, SHUT_WR), -1);
         FD_CLR(s, &wset);
       }
       else{
-        cerr << "TRACE: " << count << " bytes to send\n";
+        cerr << "TRACE: " << count << " bytes to send.\n";
 
         int sent = send(s, buf, count, 0);
         if (sent == -1){
-          SOCKETS_PERROR("ERROR: Error when sending");
+          SOCKETS_PERROR("ERROR: send");
           return false;
         }
         else{
           assert(sent == count);
-          cerr << "TRACE: " << sent << " bytes sent\n";
+          cerr << "TRACE: " << sent << " bytes sent.\n";
         }
       }
     }
@@ -469,7 +490,7 @@ bool select_unix_handler(Settings * settings_, int s){
 
     int num_ready = select(maxfd + 1, &rset, &wset, 0, 0);
     if (num_ready == -1){
-      cerr << "ERROR: select() reported an error\n";
+      cerr << "ERROR: select() reported an error.\n";
       return false;
     }
 
@@ -528,7 +549,7 @@ bool select_unix_handler(Settings * settings_, int s){
     if (FD_ISSET(s, &wset)){
       int count = send(s, &*(from.snd_begin()), from.snd_size(), 0 /* flags */);
       if (count == -1){
-        SOCKETS_PERROR("ERROR: Error while sending.");
+        SOCKETS_PERROR("ERROR: send");
         return false;
       }
       else{
@@ -543,18 +564,170 @@ bool select_unix_handler(Settings * settings_, int s){
 }
 #endif
 
+#ifdef UNIX
+bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, pid_t childpid){
+#endif
+#ifdef WIN32
+bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HANDLE childthread){
+#endif
+  bool ret = true;
+
+  Buffer buffer(buffer_size);
+  __int8_t * const buf = &buffer[0];
+
+  while (true){
+    input.read(reinterpret_cast<char *>(buf), buffer_size / sizeof(char));
+    int count = input.gcount() * sizeof(char);
+    if (count == 0){
+      cerr << "TRACE: EOF at input.\n";
+
+      if (socket_type == SOCK_STREAM)
+        verify_ne(shutdown(s, SHUT_WR), -1);
+
+      break;
+    }
+
+    int sent = 0;
+    while (count != sent){
+      int cur = send(s, buf + sent, count - sent, 0 /* flags */ );
+      if (cur == -1){
+        SOCKETS_PERROR("ERROR: send");
+        ret = false;
+        break;
+      }
+      sent += cur;
+    }
+    cerr << "TRACE: " << count << " bytes sent.\n";
+  }
+
+  if (socket_type == SOCK_STREAM){
+    cerr << "TRACE: Waiting for child process/thread termination.\n";
+
+    #ifdef UNIX
+      if (waitpid(childpid, NULL, 0 /* options */ ) == -1){
+        cerr << "ERROR: waitpid failed.\n";
+        return false;
+      }
+    #endif
+    #ifdef WIN32
+      verify_ne(WaitForSingleObject(childthread, INFINITE), WAIT_FAILED);
+    #endif
+  }
+  else if (socket_type == SOCK_DGRAM){
+    cerr << "TRACE: Sleep 5 seconds to receive remained data from server if any.\n";
+    sleep_(5);
+
+    cerr << "TRACE: Terminate child process/thread.\n";
+    #ifdef UNIX
+      kill(childpid, SIGTERM);
+    #endif
+    #ifdef WIN32
+      verify_ne(TerminateThread(childthread, 0), 0);
+    #endif
+  }
+  else
+    assert(false);
+
+  cerr << "TRACE: Exit main process/thread.\n";
+  return ret;
+}
+
+#ifdef UNIX
+  void mt_subprocess(int s, int buffer_size, ostream & output){
+#endif
+#ifdef WIN32
+  struct mt_subprocess_data{
+    int s;
+    int buffer_size;
+    ostream * output;
+  };
+  DWORD WINAPI mt_subprocess(void * param){
+  mt_subprocess_data * data = reinterpret_cast<mt_subprocess_data *>(param);
+  assert(data);
+
+  int s = data->s;
+  int buffer_size = data->buffer_size;
+  ostream & output = *data->output;
+
+  delete data;
+  data = 0;
+#endif
+
+  Buffer buffer(buffer_size);
+  __int8_t * const buf = &buffer[0];
+
+  while (true){
+    int count = recv(s, buf, buffer_size, 0 /* flags */ );
+    if (count == -1){
+      SOCKETS_PERROR("ERROR: recv");
+      break;
+    }
+    else if (count == 0){
+      cerr << "TRACE: Server closed connection.\n";
+      break;
+    }
+    else{
+      cerr << "TRACE: " << count << " bytes read.\n";
+      output.write(reinterpret_cast<char *>(buf), count);
+
+      /*
+       * This is necessary.
+       *
+       * For TCP, it can be places before exit(0)
+       * (depends on how child process may be terminated).
+       */
+      output.flush();
+    }
+  }
+
+  cerr << "TRACE: Exit child thread/process.\n";
+  #ifdef WIN32
+    return 0;
+  #endif
+}
+
+bool mt_handler(Settings * settings_, int s){
+  MtSettings * settings = static_cast<MtSettings *>(settings_);
+
+  istream & input = settings->get_input();
+  ostream & output = settings->get_output();
+
+  #ifdef UNIX
+    pid_t childpid = fork();
+    if (childpid)
+      return mt_mainprocess(s, settings->socket_type, settings->buffer_size, input, childpid);
+    else{
+      mt_subprocess(s, settings->buffer_size, output);
+      exit(0);
+    }
+  #endif
+  #ifdef WIN32
+    mt_subprocess_data * data = new mt_subprocess_data;
+    data->s = s;
+    data->buffer_size = settings->buffer_size;
+    data->output = &output;
+    HANDLE childthread = CreateThread(0, 0, mt_subprocess, data, 0, 0);
+    return mt_mainprocess(s, settings->socket_type, settings->buffer_size, input, childthread);
+  #endif
+}
+
 } // namespace
 
 int main(int argc, char ** argv){
   SimpleSettings        simple_settings;
   SelectWindowsSettings select_windows_settings;
   SelectUnixSettings    select_unix_settings;
+  MtSettings            mt_settings;
 
   vector<string> select_windows_mode_names;
   #ifdef WIN32
     select_windows_mode_names.push_back("select");
   #endif
   select_windows_mode_names.push_back("select-windows");
+
+  vector<string> mt_mode_names;
+  mt_mode_names.push_back("multithreaded");
+  mt_mode_names.push_back("mt");
 
   ThisFramework::Modes modes;
   modes.push_back(ThisFramework::ModeDescription(
@@ -574,5 +747,10 @@ int main(int argc, char ** argv){
       &select_unix_settings,
       &select_unix_handler));
   #endif
+  modes.push_back(ThisFramework::ModeDescription(
+    mt_mode_names,
+    "Multiprocess (on Unix) / multithreaded (on Windows) client.",
+    &mt_settings,
+    &mt_handler));
   return ThisFramework::run("client", argc, argv, modes, invoke_handler) ? 0 : 1;
 }
