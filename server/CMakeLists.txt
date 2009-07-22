@@ -3,7 +3,7 @@ if(UNIX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt")
 endif(UNIX)
 
-add_executable(server server.cpp)
+add_executable(server server.cpp client.hpp client_select.hpp)
 
 set(LIBS)
 if(WIN32)

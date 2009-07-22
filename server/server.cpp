@@ -1,7 +1,7 @@
 #include "../common/common.h"
 #include "../common/framework.h"
+#include "client_select.hpp"
 
-#include <list>
 using namespace std;
 
 #ifdef UNIX
@@ -351,85 +351,6 @@ tcp_return:
   return false;
 }
 
-struct SelectClient{
-  SelectClient(int s_, int buffer_size): s(s_), buffer(buffer_size), rd_disabled(false){
-  }
-
-  int s;
-  ReadWriteBuffer buffer;
-  bool rd_disabled;
-};
-
-struct SelectClientFactory{
-  typedef list<SelectClient> SelectClients;
-  typedef SelectClients::iterator iterator;
-
-  iterator begin(){ return clients_.begin(); }
-  iterator end(){ return clients_.end(); }
-
-  SelectClientFactory(int buffer_size_, fd_set * rset_, fd_set * wset_, int * maxfd_):
-    clients_(), buffer_size(buffer_size_), rset(rset_), wset(wset_), maxfd(maxfd_), maxfd_min(*maxfd_){
-  }
-
-  void new_client(int s){
-    clients_.push_back(SelectClient(s, buffer_size));
-
-    FD_SET(s, rset);
-    if (*maxfd < s)
-      *maxfd = s;
-  }
-
-  void rd_advance(iterator iter, int count){
-    bool not_in_w = iter->buffer.snd_empty();
-
-    iter->buffer.rd_advance(count);
-    if (iter->buffer.rd_empty())
-      FD_CLR(iter->s, rset);
-    if (not_in_w)
-      FD_SET(iter->s, wset);
-  }
-
-  void snd_advance(iterator iter, int count){
-    bool not_in_r = iter->buffer.rd_empty();
-
-    iter->buffer.snd_advance(count);
-    if (iter->buffer.snd_empty())
-      FD_CLR(iter->s, wset);
-    if (!rd_disabled && not_in_r && !iter->buffer.rd_empty())
-      FD_SET(iter->s, rset);
-  }
-
-  void rd_disable(iterator iter){
-    iter->rd_disabled = true;
-    FD_CLR(iter->s, rset);
-  }
-
-  iterator delete_client(iterator iter){
-    FD_CLR(iter->s, rset);
-    FD_CLR(iter->s, wset);
-
-    verify_ne(close(iter->s), -1);
-    iter = clients_.erase(iter);
-
-    *maxfd = maxfd_min;
-    iterator begin_(begin());
-    const iterator end_(end());
-    for(; begin_ != end_; ++begin_)
-      if (begin_->s > *maxfd)
-        *maxfd = begin_->s;
-
-    return iter;
-  }
-
-private:
-  list<SelectClient> clients_;
-  int buffer_size;
-  fd_set * rset;
-  fd_set * wset;
-  int * maxfd;
-  int maxfd_min;
-};
-
 bool select_handler(Settings * settings, int s){
   if (listen(s, 5) == -1){
     SOCKETS_PERROR("ERROR: listen");
@@ -445,7 +366,9 @@ bool select_handler(Settings * settings, int s){
   FD_SET(s, &xrset);
   int maxfd = s;
 
-  SelectClientFactory client_factory(settings->buffer_size, &xrset, &xwset, &maxfd);
+  SelectClientFactory client_factory(settings->buffer_size,
+    SelectClientFactory::storage_mixin_t(),
+    SelectClientFactory::network_mixin_t(&xrset, &xwset, &maxfd));
 
   for (;;){
     fd_set rset = xrset;
@@ -459,11 +382,12 @@ bool select_handler(Settings * settings, int s){
       if (c == -1){
         /* See Stevens W.R. - "Unix Network Programming", chapter 15.6 */
         #ifdef UNIX
-          if (errno != EWOULDBLOCK && errno != ECONNABORTED && errno != EPROTO && errno != EINTR){
+          if (errno != EWOULDBLOCK && errno != ECONNABORTED && errno != EPROTO && errno != EINTR)
         #endif
         #ifdef WIN32
-          if (WSAGetLastError() != WSAECONNRESET){
+          if (WSAGetLastError() != WSAECONNRESET)
         #endif
+          {
             SOCKETS_PERROR("ERROR: accept");
             return false;
           }
@@ -531,7 +455,7 @@ bool select_handler(Settings * settings, int s){
         }
         else{
           client_factory.snd_advance(iter, count);
-          if (iter->rd_disabled && iter->buffer.empty()){
+          if (iter->rd_disabled() && iter->buffer.empty()){
             cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
             iter = client_factory.delete_client(iter);
             continue;
