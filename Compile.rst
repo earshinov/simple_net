@@ -38,3 +38,7 @@ A solution file will be placed in the ``build`` directory. Open it with Visual S
 
 You may also generate a zip archive containing binaries.
 Just compile in the Release mode and run ``cpack`` within the ``build`` directory.
+
+Currently libev mode is not supported on Windows. If you'd like to include it,
+download libev from the official web site and make CMake find it (or link it
+statically instead). Tell me about the results of your attempts.

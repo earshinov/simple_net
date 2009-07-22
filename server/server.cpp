@@ -1,3 +1,4 @@
+#include "config.h"
 #include "../common/common.h"
 #include "../common/framework.h"
 #include "client_select.hpp"
@@ -9,6 +10,13 @@ using namespace std;
   #include <semaphore.h>
   #include <signal.h>
   #include <sys/wait.h>
+#endif
+
+#ifdef HAVE_LIBEV
+  #include "client_libev.hpp"
+  LibevClientFactory * libev_factory = 0;
+
+  #include <ev.h>
 #endif
 
 namespace{
@@ -110,7 +118,7 @@ struct LimitMixin: public framework::settings::mixins::Base {
   }
 };
 
-struct TcpSettings:
+struct LimitSettings:
   public Settings,
   public LimitMixin{
 
@@ -164,12 +172,14 @@ struct TcpSettings:
 };
 
 typedef Settings UdpSetting, SelectSettings;
+typedef LimitSettings TcpSettings, LibevSettings;
 
 
 typedef vector<__int8_t> Buffer;
 typedef bool (*Handler)(Settings * settings, int s);
 typedef framework::Framework<Handler> ThisFramework;
 
+/* ------------------------------------------------------------------------- */
 
 bool udp_handler(Settings * settings, int s){
   Buffer buffer(settings->buffer_size);
@@ -202,6 +212,8 @@ bool udp_handler(Settings * settings, int s){
   }
   return true;
 }
+
+/* ------------------------------------------------------------------------- */
 
 #ifdef UNIX
 sem_t sem;
@@ -468,6 +480,37 @@ bool select_handler(Settings * settings, int s){
   }
 }
 
+/* ------------------------------------------------------------------------- */
+#ifdef HAVE_LIBEV
+
+bool libev_handler(Settings * settings_, int s){
+  LibevSettings * settings = static_cast<LibevSettings *>(settings_);
+
+  if (listen(s, 5) == -1){
+    SOCKETS_PERROR("ERROR: listen");
+    return false;
+  }
+
+  struct ev_loop * loop = ev_default_loop(0);
+  if (!loop){
+    cerr << "ERROR: ev_default_loop\n";
+    return false;
+  }
+
+  LibevClientFactory client_factory(
+    s, settings->buffer_size, settings->limit,
+    LibevClientFactory::storage_mixin_t(),
+    LibevClientFactory::network_mixin_t(loop));
+  libev_factory = &client_factory;
+
+  ev_loop(loop, 0);
+
+  return false;
+}
+
+#endif // HAVE_LIBEV
+/* ------------------------------------------------------------------------- */
+
 bool invoke_handler(Handler handler, framework::settings::Base * settings_){
   Settings * settings = static_cast<Settings *>(settings_);
 
@@ -527,6 +570,9 @@ int main(int argc, char ** argv){
   UdpSettings udp_settings;
   TcpSettings tcp_settings;
   SelectSettings select_settings;
+  #ifdef HAVE_LIBEV
+    LibevSettings libev_settings;
+  #endif
 
   string tcp_description =
     "Simple TCP server. WARNING: Server is vulnerable to DoS attack if -l option\n"
@@ -539,5 +585,9 @@ int main(int argc, char ** argv){
     "tcp", tcp_description, &tcp_settings, &tcp_handler));
   modes.push_back(ThisFramework::ModeDescription(
     "select", "A TCP server written using select() function.", &select_settings, &select_handler));
+  #ifdef HAVE_LIBEV
+    modes.push_back(ThisFramework::ModeDescription(
+      "libev", "A TCP server written using libev library.", &libev_settings, &libev_handler));
+  #endif
   return ThisFramework::run("server", argc, argv, modes, invoke_handler) ? 0 : 1;
 }
