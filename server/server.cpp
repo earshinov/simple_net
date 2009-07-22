@@ -395,13 +395,13 @@ struct SelectClientFactory{
     iter->buffer.snd_advance(count);
     if (iter->buffer.snd_empty())
       FD_CLR(iter->s, wset);
-    if (not_in_r && !iter->buffer.rd_empty())
+    if (!rd_disabled && not_in_r && !iter->buffer.rd_empty())
       FD_SET(iter->s, rset);
   }
 
   void rd_disable(iterator iter){
-  iter->rd_disabled = true;
-  FD_CLR(iter->s, rset);
+    iter->rd_disabled = true;
+    FD_CLR(iter->s, rset);
   }
 
   iterator delete_client(iterator iter){
