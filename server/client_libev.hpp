@@ -53,7 +53,7 @@ struct LibevClient: public Client<LibevClient>{
 
       ev_io_init(&accept_watcher, &accept_cb, s, EV_READ);
       accept_watcher.data = this;
-      ev_io_start(loop, &accept_watcher);
+      ev_io_start(EV_A_ &accept_watcher);
     }
 
     ~LibevClientFactory(){
@@ -67,7 +67,7 @@ struct LibevClient: public Client<LibevClient>{
       pthread_mutex_lock(&m);
       --n_clients;
       if (!ev_is_active(&accept_watcher))
-        ev_io_start(loop, &accept_watcher);
+        ev_io_start(EV_A_ &accept_watcher);
       assert(n_clients >= 0);
       pthread_mutex_unlock(&m);
     }
@@ -84,7 +84,7 @@ struct LibevClient: public Client<LibevClient>{
       pthread_mutex_lock(&m);
       ++n_clients;
       if (limit && n_clients == limit)
-        ev_io_stop(loop, &accept_watcher);
+        ev_io_stop(EV_A_ &accept_watcher);
       pthread_mutex_unlock(&m);
     }
 
@@ -118,16 +118,20 @@ private:
   void created(LibevClientFactory & f);
 
   void register_read(LibevClientFactory & f){
-    ev_io_start(f.loop, &read_watcher);
+    struct ev_loop * loop = f.loop;
+    ev_io_start(EV_A_ &read_watcher);
   }
   void register_write(LibevClientFactory & f){
-    ev_io_start(f.loop, &write_watcher);
+    struct ev_loop * loop = f.loop;
+    ev_io_start(EV_A_ &write_watcher);
   }
   void unregister_read(LibevClientFactory & f){
-    ev_io_stop(f.loop, &read_watcher);
+    struct ev_loop * loop = f.loop;
+    ev_io_stop(EV_A_ &read_watcher);
   }
   void unregister_write(LibevClientFactory & f){
-    ev_io_stop(f.loop, &write_watcher);
+    struct ev_loop * loop = f.loop;
+    ev_io_stop(EV_A_ &write_watcher);
   }
   void prepare_close(LibevClientFactory & f){
   }
