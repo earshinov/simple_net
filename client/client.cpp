@@ -1,6 +1,9 @@
 #include "../common/common.h"
 #include "../common/framework.h"
+#include "../common/logger.h"
+
 using namespace std;
+using namespace logger;
 
 #ifdef UNIX
   #include <sys/wait.h>
@@ -13,7 +16,9 @@ struct Settings:
   public framework::settings::mixins::SocketTypeMixin,
   public framework::settings::mixins::AddressMixin,
   public framework::settings::mixins::PortMixin,
-  public framework::settings::mixins::BufferSizeMixin {
+  public framework::settings::mixins::BufferSizeMixin,
+  public framework::settings::mixins::VerbosityMixin,
+  public framework::settings::mixins::QuietMixin{
 
   /*
    * NOTE: SocketTypeMixin is not mentioned in methods as we do not want this
@@ -24,7 +29,9 @@ struct Settings:
     return
       framework::settings::mixins::AddressMixin::option() +
       framework::settings::mixins::PortMixin::option() +
-      framework::settings::mixins::BufferSizeMixin::option();
+      framework::settings::mixins::BufferSizeMixin::option() +
+      framework::settings::mixins::VerbosityMixin::option() +
+      framework::settings::mixins::QuietMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
@@ -34,7 +41,11 @@ struct Settings:
       "-" + framework::settings::mixins::PortMixin::letter()               + "\n"
         "  " + framework::settings::mixins::PortMixin::description()       + "\n"
       "-" + framework::settings::mixins::BufferSizeMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::BufferSizeMixin::description() + "\n";
+        "  " + framework::settings::mixins::BufferSizeMixin::description() + "\n"
+      "-" + framework::settings::mixins::VerbosityMixin::letter()          + "\n"
+        "  " + framework::settings::mixins::VerbosityMixin::description()  + "\n"
+      "-" + framework::settings::mixins::QuietMixin::letter()              + "\n"
+        "  " + framework::settings::mixins::QuietMixin::description()      + "\n";
   }
 
   /* override */ virtual int handle(char letter, char * optarg){
@@ -45,6 +56,10 @@ struct Settings:
       result = framework::settings::mixins::PortMixin::handle(optarg);
     else if (letter == framework::settings::mixins::BufferSizeMixin::letter())
       result = framework::settings::mixins::BufferSizeMixin::handle(optarg);
+    else if (letter == framework::settings::mixins::VerbosityMixin::letter())
+      result = framework::settings::mixins::VerbosityMixin::handle(optarg);
+    else if (letter == framework::settings::mixins::QuietMixin::letter())
+      result = framework::settings::mixins::QuietMixin::handle(optarg);
     else
       return 1;
 
@@ -74,6 +89,10 @@ struct Settings:
     if (!framework::settings::mixins::BufferSizeMixin::is_set()){
       success = false;
       cerr << "ERROR: Option '-" << framework::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
+    }
+    if (!framework::settings::mixins::VerbosityMixin::is_set()){
+      success = false;
+      cerr << "ERROR: Option '-" << framework::settings::mixins::VerbosityMixin::letter() << "' is required.\n";
     }
     return success;
   }
@@ -269,14 +288,22 @@ typedef vector<__int8_t> Buffer;
 typedef bool (*Handler)(Settings * settings, int s);
 typedef framework::Framework<Handler> ThisFramework;
 
+
+Logger logger;
+
+
 bool invoke_handler(Handler handler, framework::settings::Base * settings_){
   Settings * settings = static_cast<Settings *>(settings_);
+  logger.setLevel(
+    (settings->verbosity > 0) ? TRACE :
+      (settings->quiet ? WARN : INFO));
+
   bool ret = false;
 
   #ifdef WIN32
     WSADATA wsadata;
     if (WSAStartup(MAKEWORD(2, 2), &wsadata)){
-      cerr << "ERROR: Could not initialize socket library.\n";
+      logger.writer(ERROR_) << "Could not initialize socket library.\n";
       return false;
     }
   #endif
@@ -292,7 +319,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
         settings->addr.c_str(),
         settings->port.c_str(),
         &hints, &res) != 0){
-    cerr << "ERROR: Could not resolve IP address and/or port.\n";
+    logger.writer(ERROR_) << "Could not resolve IP address and/or port.\n";
     goto run_return;
   }
 
@@ -308,7 +335,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
     break;
   }
   if (s == -1){
-    cerr << "ERROR: Could not connect to server.\n";
+    logger.writer(ERROR_) << "Could not connect to server.\n";
     goto run_return;
   }
 
@@ -336,7 +363,7 @@ bool simple_handler(Settings * settings_, int s){
     int count = input.gcount() * sizeof(char);
     if (count == 0)
       continue;
-    cerr << "TRACE: " << count << " bytes to send.\n";
+    logger.writer(TRACE) << count << " bytes to send.\n";
 
     int sent_total = 0;
     while (sent_total < count){
@@ -345,10 +372,10 @@ bool simple_handler(Settings * settings_, int s){
         SOCKETS_PERROR("ERROR: send");
         return false;
       }
-      cerr << "TRACE: " << sent_current << " bytes sent.\n";
+      logger.writer(TRACE) << sent_current << " bytes sent.\n";
       sent_total += sent_current;
     }
-    cerr << "TRACE: Start receiving.\n";
+    logger.writer(TRACE) << "Start receiving.\n";
 
     int recv_total = 0;
     while (recv_total < count){
@@ -358,10 +385,10 @@ bool simple_handler(Settings * settings_, int s){
         return false;
       }
       if (recv_current == 0){
-        cerr << "ERROR: Server shutdowned unexpectedly.\n";
+        logger.writer(ERROR_) << "Server shutdowned unexpectedly.\n";
         return false;
       }
-      cerr << "TRACE: Received " << recv_current << " bytes.\n";
+      logger.writer(TRACE) << "Received " << recv_current << " bytes.\n";
       recv_total += recv_current;
     }
     output.write(reinterpret_cast<char *>(buf), recv_total);
@@ -391,7 +418,7 @@ bool select_windows_handler(Settings * settings_, int s){
 
     int num_ready = select(s + 1, &rset, &wset, 0, 0);
     if (num_ready == -1){
-      cerr << "ERROR: select() reported an error.\n";
+      logger.writer(ERROR_) << "select() reported an error.\n";
       return false;
     }
 
@@ -403,18 +430,18 @@ bool select_windows_handler(Settings * settings_, int s){
       }
       else if (received == 0){
         if (stdin_eof){
-          cerr << "TRACE: Server closed the connection.\n";
+          logger.writer(INFO) << "Server closed the connection.\n";
           return true;
         }
         else{
-          cerr << "ERROR: Server closed the connection unexpectedly.\n";
+          logger.writer(ERROR_) << "Server closed the connection unexpectedly.\n";
           return false;
         }
       }
       else {
-        cerr << "TRACE: " << received << " bytes to print.\n";
+        logger.writer(TRACE) << received << " bytes to print.\n";
         output.write(reinterpret_cast<char *>(buf), received);
-        cerr << "TRACE: Bytes printed.\n";
+        logger.writer(TRACE) << "Bytes printed.\n";
       }
     }
 
@@ -422,13 +449,13 @@ bool select_windows_handler(Settings * settings_, int s){
       input.read(reinterpret_cast<char *>(buf), settings->buffer_size / sizeof(char));
       int count = input.gcount() * sizeof(char);
       if (count == 0){
-        cerr << "TRACE: EOF at input.\n";
+        logger.writer(INFO) << "EOF at input.\n";
         stdin_eof = true;
         verify_ne(shutdown(s, SHUT_WR), -1);
         FD_CLR(s, &wset);
       }
       else{
-        cerr << "TRACE: " << count << " bytes to send.\n";
+        logger.writer(TRACE) << count << " bytes to send.\n";
 
         int sent = send(s, buf, count, 0);
         if (sent == -1){
@@ -437,7 +464,7 @@ bool select_windows_handler(Settings * settings_, int s){
         }
         else{
           assert(sent == count);
-          cerr << "TRACE: " << sent << " bytes sent.\n";
+          logger.writer(TRACE) << sent << " bytes sent.\n";
         }
       }
     }
@@ -490,7 +517,7 @@ bool select_unix_handler(Settings * settings_, int s){
 
     int num_ready = select(maxfd + 1, &rset, &wset, 0, 0);
     if (num_ready == -1){
-      cerr << "ERROR: select() reported an error.\n";
+      logger.writer(ERROR_) << "select() reported an error.\n";
       return false;
     }
 
@@ -500,7 +527,7 @@ bool select_unix_handler(Settings * settings_, int s){
     if (FD_ISSET(output, &wset)){
       int count = write(output, &*(to.snd_begin()), to.snd_size());
       if (count == -1){
-        cerr << "ERROR: An error occured while writing to output.\n";
+        logger.writer(ERROR_) << "An error occured while writing to output.\n";
         return false;
       }
       else
@@ -515,11 +542,11 @@ bool select_unix_handler(Settings * settings_, int s){
       }
       else if (count == 0){
         if (state == STATE_ALL_SENT){
-          cerr << "TRACE: Server closed the connection.\n";
+          logger.writer(INFO) << "Server closed the connection.\n";
           return true;
         }
         else{
-          cerr << "ERROR: Server closed the connection unexpectedly.\n";
+          logger.writer(ERROR_) << "Server closed the connection unexpectedly.\n";
           return false;
         }
       }
@@ -530,11 +557,11 @@ bool select_unix_handler(Settings * settings_, int s){
     if (FD_ISSET(input, &rset)){
       int count = read(input, &*(from.rd_begin()), from.rd_size());
       if (count == -1){
-        cerr << "ERROR: An error occured while reading from input.\n";
+        logger.writer(ERROR_) << "An error occured while reading from input.\n";
         return false;
       }
       else if (count == 0){
-        cerr << "TRACE: EOF at standard input.\n";
+        logger.writer(INFO) << "EOF at standard input.\n";
         state = STATE_NO_INPUT;
 
         if (from.snd_empty()){
@@ -579,7 +606,7 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
     input.read(reinterpret_cast<char *>(buf), buffer_size / sizeof(char));
     int count = input.gcount() * sizeof(char);
     if (count == 0){
-      cerr << "TRACE: EOF at input.\n";
+      logger.writer(INFO) << "EOF at input.\n";
 
       if (socket_type == SOCK_STREAM)
         verify_ne(shutdown(s, SHUT_WR), -1);
@@ -597,15 +624,15 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
       }
       sent += cur;
     }
-    cerr << "TRACE: " << count << " bytes sent.\n";
+    logger.writer(TRACE) << count << " bytes sent.\n";
   }
 
   if (socket_type == SOCK_STREAM){
-    cerr << "TRACE: Waiting for child process/thread termination.\n";
+    logger.writer(INFO) << "Waiting for child process/thread termination.\n";
 
     #ifdef UNIX
       if (waitpid(childpid, NULL, 0 /* options */ ) == -1){
-        cerr << "ERROR: waitpid failed.\n";
+        logger.writer(ERROR_) << "waitpid failed.\n";
         return false;
       }
     #endif
@@ -614,10 +641,10 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
     #endif
   }
   else if (socket_type == SOCK_DGRAM){
-    cerr << "TRACE: Sleep 5 seconds to receive remained data from server if any.\n";
+    logger.writer(INFO) << "Sleep 5 seconds to receive remained data from server if any.\n";
     sleep_(5);
 
-    cerr << "TRACE: Terminate child process/thread.\n";
+    logger.writer(INFO) << "Terminate child process/thread.\n";
     #ifdef UNIX
       kill(childpid, SIGTERM);
     #endif
@@ -628,7 +655,7 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
   else
     assert(false);
 
-  cerr << "TRACE: Exit main process/thread.\n";
+  logger.writer(INFO) << "Exit main process/thread.\n";
   return ret;
 }
 
@@ -663,11 +690,11 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
       break;
     }
     else if (count == 0){
-      cerr << "TRACE: Server closed connection.\n";
+      logger.writer(INFO) << "Server closed connection.\n";
       break;
     }
     else{
-      cerr << "TRACE: " << count << " bytes read.\n";
+      logger.writer(TRACE) << count << " bytes read.\n";
       output.write(reinterpret_cast<char *>(buf), count);
 
       /*
@@ -680,7 +707,7 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
     }
   }
 
-  cerr << "TRACE: Exit child thread/process.\n";
+  logger.writer(INFO) << "Exit child thread/process.\n";
   #ifdef WIN32
     return 0;
   #endif

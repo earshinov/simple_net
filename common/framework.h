@@ -334,6 +334,42 @@ namespace framework {
         }
       };
 
+      struct VerbosityMixin: public Base {
+        VerbosityMixin(): verbosity(0){
+        }
+        ~VerbosityMixin(){
+        }
+
+        char letter() const { return 'v'; }
+        std::string option() const { return "v"; }
+        std::string description() const { return "Make output more verbose."; }
+
+        int verbosity;
+
+        int handle(char * optarg){
+          ++verbosity;
+          return 0;
+        }
+      };
+
+      struct QuietMixin: public Base {
+        QuietMixin(): quiet(false){
+        }
+        ~QuietMixin(){
+        }
+
+        char letter() const { return 'q'; }
+        std::string option() const { return "q"; }
+        std::string description() const { return "Show only errors and warnings."; }
+
+        bool quiet;
+
+        int handle(char * optarg){
+          quiet = true;
+          return 0;
+        }
+      };
+
     } // namespace mixins
 
   } // namespace settings

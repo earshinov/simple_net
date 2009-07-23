@@ -1,8 +1,8 @@
 add_executable(client client.cpp)
 
-set(LIBS)
+set(LIBS common)
 if(WIN32)
-  set(LIBS common WS2_32)
+  set(LIBS ${LIBS} WS2_32)
 endif(WIN32)
 target_link_libraries(client ${LIBS})
 

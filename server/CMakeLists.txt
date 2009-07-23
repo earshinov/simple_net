@@ -1,10 +1,9 @@
-set(LIBS)
-
+set(LIBS common)
 if(UNIX)
-  set(LIBS rt) # POSIX run-time library
+  set(LIBS ${LIBS} rt) # POSIX run-time library
 endif(UNIX)
 if(WIN32)
-  set(LIBS common WS2_32)
+  set(LIBS ${LIBS} WS2_32)
 endif(WIN32)
 
 find_library(LIBEV ev)
