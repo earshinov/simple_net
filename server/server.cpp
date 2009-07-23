@@ -501,7 +501,6 @@ bool libev_handler(Settings * settings_, int s){
     s, settings->buffer_size, settings->limit,
     LibevClientFactory::storage_mixin_t(),
     LibevClientFactory::network_mixin_t(loop));
-  libev_factory = &client_factory;
 
   ev_loop(loop, 0);
 

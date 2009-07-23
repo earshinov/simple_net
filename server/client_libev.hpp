@@ -45,21 +45,8 @@ struct LibevClient: public Client<LibevClient>{
 
     LibevClientFactory(
         int s, int buffer_size, int limit_,
-        storage_mixin_t storage_mixin, network_mixin_t network_mixin):
-      base(buffer_size, storage_mixin, network_mixin),
-      limit(limit_), n_clients(0){
-
-      pthread_mutex_init(&m, 0);
-
-      ev_io_init(&accept_watcher, &accept_cb, s, EV_READ);
-      accept_watcher.data = this;
-      ev_io_start(EV_A_ &accept_watcher);
-    }
-
-    ~LibevClientFactory(){
-      assert("mutex unlocked" && pthread_mutex_trylock(&m));
-      pthread_mutex_destroy(&m);
-    }
+        storage_mixin_t storage_mixin, network_mixin_t network_mixin);
+    ~LibevClientFactory();
 
     void delete_client(iterator iter){
       base::delete_client(iter);
@@ -164,9 +151,33 @@ private:
  * custom data with libev watchers, but it would consume O(n) amount of memory,
  * where n is the number of clients. That costs too much for eliminating a
  * global variable.
+ *
+ * A better way is using ev_userdata/ev_set_userdata functions, but they are
+ * available in libev >= 3.7 only. It's a rather recent version, so it may be
+ * unavailable in official repos of user's distro, if any).
  */
 typedef LibevClient::LibevClientFactory LibevClientFactory;
 extern LibevClientFactory * libev_factory;
+
+LibevClient::LibevClientFactory::LibevClientFactory(
+    int s, int buffer_size, int limit_,
+    storage_mixin_t storage_mixin, network_mixin_t network_mixin):
+  base(buffer_size, storage_mixin, network_mixin),
+  limit(limit_), n_clients(0){
+
+  libev_factory = this;
+  pthread_mutex_init(&m, 0);
+
+  ev_io_init(&accept_watcher, &accept_cb, s, EV_READ);
+  accept_watcher.data = this;
+  ev_io_start(EV_A_ &accept_watcher);
+}
+
+LibevClient::LibevClientFactory::~LibevClientFactory(){
+  libev_factory = 0;
+  assert("mutex unlocked" && pthread_mutex_trylock(&m));
+  pthread_mutex_destroy(&m);
+}
 
 void LibevClient::created(LibevClientFactory & f){
   ev_io_init(&read_watcher, &read_cb_static, s, EV_READ);
