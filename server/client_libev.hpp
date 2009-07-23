@@ -51,12 +51,10 @@ struct LibevClient: public Client<LibevClient>{
     void delete_client(iterator iter){
       base::delete_client(iter);
 
-      pthread_mutex_lock(&m);
       --n_clients;
       if (!ev_is_active(&accept_watcher))
         ev_io_start(EV_A_ &accept_watcher);
       assert(n_clients >= 0);
-      pthread_mutex_unlock(&m);
     }
 
   protected:
@@ -68,11 +66,9 @@ struct LibevClient: public Client<LibevClient>{
     void new_client(int s) {
       base::new_client(s);
 
-      pthread_mutex_lock(&m);
       ++n_clients;
       if (limit && n_clients == limit)
         ev_io_stop(EV_A_ &accept_watcher);
-      pthread_mutex_unlock(&m);
     }
 
     static void accept_cb(EV_P_ ev_io * watcher, int revents){
@@ -89,7 +85,6 @@ struct LibevClient: public Client<LibevClient>{
   private:
     int limit;
     int n_clients;
-    pthread_mutex_t m;
     ev_io accept_watcher;
   };
 
@@ -166,7 +161,6 @@ LibevClient::LibevClientFactory::LibevClientFactory(
   limit(limit_), n_clients(0){
 
   libev_factory = this;
-  pthread_mutex_init(&m, 0);
 
   ev_io_init(&accept_watcher, &accept_cb, s, EV_READ);
   accept_watcher.data = this;
@@ -175,8 +169,6 @@ LibevClient::LibevClientFactory::LibevClientFactory(
 
 LibevClient::LibevClientFactory::~LibevClientFactory(){
   libev_factory = 0;
-  assert("mutex unlocked" && pthread_mutex_trylock(&m));
-  pthread_mutex_destroy(&m);
 }
 
 void LibevClient::created(LibevClientFactory & f){
