@@ -446,7 +446,7 @@ bool select_handler(Settings * settings, int s){
 
           if (iter->buffer.snd_size() == 0){
             cerr << "TRACE: Nothing to send to client. Close connection to it.\n";
-            client_factory.delete_client(iter);
+            iter = client_factory.delete_client(iter);
             continue;
           }
           else{
