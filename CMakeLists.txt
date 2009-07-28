@@ -40,6 +40,7 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 add_subdirectory(common)
+add_subdirectory(cmdfw)
 add_subdirectory(client)
 add_subdirectory(server)
 

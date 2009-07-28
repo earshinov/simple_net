@@ -1,8 +1,9 @@
 #include "config.h"
 #include "../common/common.h"
-#include "../common/framework.h"
+#include "../cmdfw/cmdfw.hpp"
 #include "client_select.hpp"
 
+#include <cstdlib>
 using namespace std;
 
 #ifdef UNIX
@@ -21,41 +22,42 @@ using namespace std;
 
 namespace{
 
-struct Settings:
-  public framework::settings::Base,
-  public framework::settings::mixins::AddressMixin,
-  public framework::settings::mixins::PortNumberMixin,
-  public framework::settings::mixins::BufferSizeMixin {
+class Settings:
+  public cmdfw::settings::Base,
+  public cmdfw::settings::mixins::AddressMixin,
+  public cmdfw::settings::mixins::PortNumberMixin,
+  public cmdfw::settings::mixins::BufferSizeMixin {
+public:
 
-    /* We could also derive from framework::settings::mixins::SocketTypeMixin. */
+    /* We could also derive from cmdfw::settings::mixins::SocketTypeMixin. */
   int socket_type;
   Settings(): socket_type(SOCK_STREAM) {}
 
   /* override */ virtual std::string options() const{
     return
-      framework::settings::mixins::AddressMixin::option() +
-      framework::settings::mixins::PortNumberMixin::option() +
-      framework::settings::mixins::BufferSizeMixin::option();
+      cmdfw::settings::mixins::AddressMixin::option() +
+      cmdfw::settings::mixins::PortNumberMixin::option() +
+      cmdfw::settings::mixins::BufferSizeMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
     return string() +
-      "-" + framework::settings::mixins::AddressMixin::letter()            + "\n"
-        "  " + framework::settings::mixins::AddressMixin::description()    + "\n"
-      "-" + framework::settings::mixins::PortNumberMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::PortNumberMixin::description() + "\n"
-      "-" + framework::settings::mixins::BufferSizeMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::BufferSizeMixin::description() + "\n";
+      "-" + cmdfw::settings::mixins::AddressMixin::letter()            + "\n"
+        "  " + cmdfw::settings::mixins::AddressMixin::description()    + "\n"
+      "-" + cmdfw::settings::mixins::PortNumberMixin::letter()         + "\n"
+        "  " + cmdfw::settings::mixins::PortNumberMixin::description() + "\n"
+      "-" + cmdfw::settings::mixins::BufferSizeMixin::letter()         + "\n"
+        "  " + cmdfw::settings::mixins::BufferSizeMixin::description() + "\n";
   }
 
   /* override */ virtual int handle(char letter, char * optarg){
     int result;
-    if (letter == framework::settings::mixins::AddressMixin::letter())
-      result = framework::settings::mixins::AddressMixin::handle(optarg);
-    else if (letter == framework::settings::mixins::PortNumberMixin::letter())
-      result = framework::settings::mixins::PortNumberMixin::handle(optarg);
-    else if (letter == framework::settings::mixins::BufferSizeMixin::letter())
-      result = framework::settings::mixins::BufferSizeMixin::handle(optarg);
+    if (letter == cmdfw::settings::mixins::AddressMixin::letter())
+      result = cmdfw::settings::mixins::AddressMixin::handle(optarg);
+    else if (letter == cmdfw::settings::mixins::PortNumberMixin::letter())
+      result = cmdfw::settings::mixins::PortNumberMixin::handle(optarg);
+    else if (letter == cmdfw::settings::mixins::BufferSizeMixin::letter())
+      result = cmdfw::settings::mixins::BufferSizeMixin::handle(optarg);
     else
       return 1;
 
@@ -74,27 +76,28 @@ struct Settings:
 
   /* override */ virtual bool validate(){
     bool success = true;
-    if (!framework::settings::mixins::AddressMixin::is_set()){
+    if (!cmdfw::settings::mixins::AddressMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::AddressMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::AddressMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::PortNumberMixin::is_set()){
+    if (!cmdfw::settings::mixins::PortNumberMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::PortNumberMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::PortNumberMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::BufferSizeMixin::is_set()){
+    if (!cmdfw::settings::mixins::BufferSizeMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
     }
     return success;
   }
 };
 
-struct UdpSettings: public Settings{
+class UdpSettings: public Settings{
+public:
   UdpSettings() { socket_type = SOCK_DGRAM; }
 };
 
-struct LimitMixin: public framework::settings::mixins::Base {
+struct LimitMixin: public cmdfw::settings::mixins::Base {
   char letter() const { return 'l'; }
   std::string option() const { return "l:"; }
   std::string description() const { return
@@ -118,9 +121,10 @@ struct LimitMixin: public framework::settings::mixins::Base {
   }
 };
 
-struct LimitSettings:
+class LimitSettings:
   public Settings,
   public LimitMixin{
+public:
 
   /* override */ virtual std::string options() const{
     return Settings::options() +
@@ -176,13 +180,42 @@ typedef LimitSettings TcpSettings, LibevSettings;
 
 
 typedef vector<__int8_t> Buffer;
-typedef bool (*Handler)(Settings * settings, int s);
-typedef framework::Framework<Handler> ThisFramework;
+typedef bool (*Handler)(Settings & settings, int s);
+
+bool invoke_handler(Handler handler, Settings & settings);
+
+bool udp_handler(Settings & settings, int s);
+bool tcp_handler(Settings & settings_, int s);
+bool select_handler(Settings & settings_, int s);
+#ifdef HAVE_LIBEV
+  bool libev_handler(Settings & settings_, int s);
+#endif
+
+
+template <typename TSettings> class ModeBase: public cmdfw::mode::Mode {
+public:
+
+  ModeBase(const string & name, const string & description, Handler handler):
+    cmdfw::mode::Mode(name, description), handler_(handler) { }
+  ModeBase(const vector<string> & names, const string & description, Handler handler):
+    cmdfw::mode::Mode(names, description), handler_(handler) { }
+
+  /* override */ virtual cmdfw::settings::Base * settings() const {
+    return new TSettings();
+  }
+
+  /* override */ virtual bool handle(cmdfw::settings::Base & settings) const {
+    return invoke_handler(handler_, static_cast<Settings &>(settings));
+  }
+
+private:
+  Handler handler_;
+};
 
 /* ------------------------------------------------------------------------- */
 
-bool udp_handler(Settings * settings, int s){
-  Buffer buffer(settings->buffer_size);
+bool udp_handler(Settings & settings, int s){
+  Buffer buffer(settings.buffer_size);
   __int8_t * buf = &buffer[0];
 
   for (;;){
@@ -192,7 +225,7 @@ bool udp_handler(Settings * settings, int s){
     sockaddr_storage addr;
     socklen_t addr_len = sizeof(addr);
 
-    int count = recvfrom(s, buf, settings->buffer_size, 0,
+    int count = recvfrom(s, buf, settings.buffer_size, 0,
       reinterpret_cast<sockaddr *>(&addr), &addr_len);
     if (count == -1){
       SOCKETS_PERROR("WARNING: recvfrom");
@@ -278,11 +311,11 @@ subprocess_return:
   #endif
 }
 
-bool tcp_handler(Settings * settings_, int s){
-  TcpSettings * settings = static_cast<TcpSettings *>(settings_);
+bool tcp_handler(Settings & settings_, int s){
+  TcpSettings & settings = static_cast<TcpSettings &>(settings_);
 
   #ifdef UNIX
-    limit = settings->limit;
+    limit = settings.limit;
     if (signal(SIGCHLD, sig_chld) == SIG_ERR){
       cerr << "ERROR: Could not bind SIGCHLD handler.\n";
       return false;
@@ -290,8 +323,8 @@ bool tcp_handler(Settings * settings_, int s){
   #endif
 
   #ifdef UNIX
-    if (settings->limit != 0){
-      if (sem_init(&sem, 0 /* not shared */, settings->limit) == -1){
+    if (settings.limit != 0){
+      if (sem_init(&sem, 0 /* not shared */, settings.limit) == -1){
         cerr << "ERROR: Could not apply limit.\n";
         return false;
       }
@@ -299,8 +332,8 @@ bool tcp_handler(Settings * settings_, int s){
   #endif
   #ifdef WIN32
     HANDLE sem = 0;
-    if (settings->limit != 0){
-      sem = CreateSemaphore(0, settings->limit, settings->limit, 0);
+    if (settings.limit != 0){
+      sem = CreateSemaphore(0, settings.limit, settings.limit, 0);
       if (!sem){
         cerr << "ERROR: Could not apply limit.\n";
         return false;
@@ -315,7 +348,7 @@ bool tcp_handler(Settings * settings_, int s){
 
   for (;;){
 
-    if (settings->limit != 0){
+    if (settings.limit != 0){
       #ifdef UNIX
         verify_ne(sem_wait(&sem), -1);
       #endif
@@ -338,7 +371,7 @@ bool tcp_handler(Settings * settings_, int s){
       else{
         // Child process
         verify_ne(close(s), -1);
-        tcp_subprocess(c, settings->buffer_size);
+        tcp_subprocess(c, settings.buffer_size);
         exit(0);
       }
     #endif
@@ -346,13 +379,13 @@ bool tcp_handler(Settings * settings_, int s){
       tcp_subprocess_data * data = new tcp_subprocess_data;
       data->sem = sem;
       data->c = c;
-      data->buffer_size = settings->buffer_size;
+      data->buffer_size = settings.buffer_size;
       CloseHandle(CreateThread(0, 0, tcp_subprocess, data, 0, 0));
     #endif
   }
 
 tcp_return:
-  if (settings->limit != 0){
+  if (settings.limit != 0){
     #ifdef UNIX
       verify_ne(sem_destroy(&sem), -1);
     #endif
@@ -363,7 +396,7 @@ tcp_return:
   return false;
 }
 
-bool select_handler(Settings * settings, int s){
+bool select_handler(Settings & settings, int s){
   if (listen(s, 5) == -1){
     SOCKETS_PERROR("ERROR: listen");
     return false;
@@ -378,7 +411,7 @@ bool select_handler(Settings * settings, int s){
   FD_SET(s, &xrset);
   int maxfd = s;
 
-  SelectClientFactory client_factory(settings->buffer_size,
+  SelectClientFactory client_factory(settings.buffer_size,
     SelectClientFactory::storage_mixin_t(),
     SelectClientFactory::network_mixin_t(&xrset, &xwset, &maxfd));
 
@@ -483,8 +516,8 @@ bool select_handler(Settings * settings, int s){
 /* ------------------------------------------------------------------------- */
 #ifdef HAVE_LIBEV
 
-bool libev_handler(Settings * settings_, int s){
-  LibevSettings * settings = static_cast<LibevSettings *>(settings_);
+bool libev_handler(Settings & settings_, int s){
+  LibevSettings & settings = static_cast<LibevSettings &>(settings_);
 
   if (listen(s, 5) == -1){
     SOCKETS_PERROR("ERROR: listen");
@@ -498,7 +531,7 @@ bool libev_handler(Settings * settings_, int s){
   }
 
   LibevClientFactory client_factory(
-    s, settings->buffer_size, settings->limit,
+    s, settings.buffer_size, settings.limit,
     LibevClientFactory::storage_mixin_t(),
     LibevClientFactory::network_mixin_t(loop));
 
@@ -510,8 +543,7 @@ bool libev_handler(Settings * settings_, int s){
 #endif // HAVE_LIBEV
 /* ------------------------------------------------------------------------- */
 
-bool invoke_handler(Handler handler, framework::settings::Base * settings_){
-  Settings * settings = static_cast<Settings *>(settings_);
+bool invoke_handler(Handler handler, Settings & settings){
 
   #ifdef WIN32
     WSADATA wsadata;
@@ -521,9 +553,9 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
     }
   #endif
 
-  int s = socket(PF_INET6, settings->socket_type, 0);
+  int s = socket(PF_INET6, settings.socket_type, 0);
   if (s == -1){
-    s = socket(PF_INET, settings->socket_type, 0);
+    s = socket(PF_INET, settings.socket_type, 0);
     if (s == -1){
       SOCKETS_PERROR("ERROR: socket");
       goto run_return;
@@ -533,7 +565,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
 
       sockaddr_in addr = {0};
       addr.sin_family = AF_INET;
-      addr.sin_port = htons(settings->port);
+      addr.sin_port = htons(settings.port);
       addr.sin_addr.s_addr = INADDR_ANY;
       if (bind(s, (sockaddr *)&addr, sizeof(addr)) == -1){
         SOCKETS_PERROR("ERROR: bind");
@@ -547,7 +579,7 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
     sockaddr_in6 addr = {0};
     addr.sin6_family = AF_INET6;
     addr.sin6_flowinfo = 0;
-    addr.sin6_port = htons(settings->port);
+    addr.sin6_port = htons(settings.port);
     addr.sin6_addr = in6addr_any;
     if (bind(s, (sockaddr *)&addr, sizeof(addr)) == -1){
       SOCKETS_PERROR("ERROR: bind");
@@ -566,27 +598,19 @@ run_return:
 } // namespace
 
 int main(int argc, char ** argv){
-  UdpSettings udp_settings;
-  TcpSettings tcp_settings;
-  SelectSettings select_settings;
-  #ifdef HAVE_LIBEV
-    LibevSettings libev_settings;
-  #endif
 
   string tcp_description =
     "Simple TCP server. WARNING: Server is vulnerable to DoS attack if -l option\n"
     "  is specified. I did not consider timeouts useful in a test program.";
 
-  ThisFramework::Modes modes;
-  modes.push_back(ThisFramework::ModeDescription(
-    "udp", "UDP server.", &udp_settings, &udp_handler));
-  modes.push_back(ThisFramework::ModeDescription(
-    "tcp", tcp_description, &tcp_settings, &tcp_handler));
-  modes.push_back(ThisFramework::ModeDescription(
-    "select", "A TCP server written using select() function.", &select_settings, &select_handler));
+  cmdfw::mode::Modes modes;
+  modes.push_back(new ModeBase<UdpSettings>("udp", "UDP server.", udp_handler));
+  modes.push_back(new ModeBase<TcpSettings>("tcp", tcp_description, tcp_handler));
+  modes.push_back(new ModeBase<SelectSettings>("select",
+    "TCP server written using select() function.", select_handler));
   #ifdef HAVE_LIBEV
-    modes.push_back(ThisFramework::ModeDescription(
-      "libev", "A TCP server written using libev library.", &libev_settings, &libev_handler));
+    modes.push_back(new ModeBase<LibevSettings>("libev",
+      "TCP server written using libev library.", &libev_handler));
   #endif
-  return ThisFramework::run("server", argc, argv, modes, invoke_handler) ? 0 : 1;
+  return cmdfw::framework::run("server", argc, argv, cmdfw::factory::Factory(modes)) ? 0 : 1;
 }

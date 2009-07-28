@@ -1,6 +1,6 @@
 add_executable(client client.cpp)
 
-set(LIBS common)
+set(LIBS common cmdfw)
 if(WIN32)
   set(LIBS ${LIBS} WS2_32)
 endif(WIN32)

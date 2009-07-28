@@ -1,9 +1,11 @@
 #include "../common/common.h"
-#include "../common/framework.h"
-#include "../common/logger.h"
+#include "../cmdfw/cmdfw.hpp"
 
-using namespace std;
+#include "../common/logger.h"
 using namespace logger;
+
+#include <cstdlib>
+using namespace std;
 
 #ifdef UNIX
   #include <sys/wait.h>
@@ -11,14 +13,15 @@ using namespace logger;
 
 namespace{
 
-struct Settings:
-  public framework::settings::Base,
-  public framework::settings::mixins::SocketTypeMixin,
-  public framework::settings::mixins::AddressMixin,
-  public framework::settings::mixins::PortMixin,
-  public framework::settings::mixins::BufferSizeMixin,
-  public framework::settings::mixins::VerbosityMixin,
-  public framework::settings::mixins::QuietMixin{
+class Settings:
+  public cmdfw::settings::Base,
+  public cmdfw::settings::mixins::SocketTypeMixin,
+  public cmdfw::settings::mixins::AddressMixin,
+  public cmdfw::settings::mixins::PortMixin,
+  public cmdfw::settings::mixins::BufferSizeMixin,
+  public cmdfw::settings::mixins::VerbosityMixin,
+  public cmdfw::settings::mixins::QuietMixin{
+public:
 
   /*
    * NOTE: SocketTypeMixin is not mentioned in methods as we do not want this
@@ -27,39 +30,39 @@ struct Settings:
 
   /* override */ virtual std::string options() const{
     return
-      framework::settings::mixins::AddressMixin::option() +
-      framework::settings::mixins::PortMixin::option() +
-      framework::settings::mixins::BufferSizeMixin::option() +
-      framework::settings::mixins::VerbosityMixin::option() +
-      framework::settings::mixins::QuietMixin::option();
+      cmdfw::settings::mixins::AddressMixin::option() +
+      cmdfw::settings::mixins::PortMixin::option() +
+      cmdfw::settings::mixins::BufferSizeMixin::option() +
+      cmdfw::settings::mixins::VerbosityMixin::option() +
+      cmdfw::settings::mixins::QuietMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
     return string() +
-      "-" + framework::settings::mixins::AddressMixin::letter()            + "\n"
-        "  " + framework::settings::mixins::AddressMixin::description()    + "\n"
-      "-" + framework::settings::mixins::PortMixin::letter()               + "\n"
-        "  " + framework::settings::mixins::PortMixin::description()       + "\n"
-      "-" + framework::settings::mixins::BufferSizeMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::BufferSizeMixin::description() + "\n"
-      "-" + framework::settings::mixins::VerbosityMixin::letter()          + "\n"
-        "  " + framework::settings::mixins::VerbosityMixin::description()  + "\n"
-      "-" + framework::settings::mixins::QuietMixin::letter()              + "\n"
-        "  " + framework::settings::mixins::QuietMixin::description()      + "\n";
+      "-" + cmdfw::settings::mixins::AddressMixin::letter()            + "\n"
+        "  " + cmdfw::settings::mixins::AddressMixin::description()    + "\n"
+      "-" + cmdfw::settings::mixins::PortMixin::letter()               + "\n"
+        "  " + cmdfw::settings::mixins::PortMixin::description()       + "\n"
+      "-" + cmdfw::settings::mixins::BufferSizeMixin::letter()         + "\n"
+        "  " + cmdfw::settings::mixins::BufferSizeMixin::description() + "\n"
+      "-" + cmdfw::settings::mixins::VerbosityMixin::letter()          + "\n"
+        "  " + cmdfw::settings::mixins::VerbosityMixin::description()  + "\n"
+      "-" + cmdfw::settings::mixins::QuietMixin::letter()              + "\n"
+        "  " + cmdfw::settings::mixins::QuietMixin::description()      + "\n";
   }
 
   /* override */ virtual int handle(char letter, char * optarg){
     int result;
-    if (letter == framework::settings::mixins::AddressMixin::letter())
-      result = framework::settings::mixins::AddressMixin::handle(optarg);
-    else if (letter == framework::settings::mixins::PortMixin::letter())
-      result = framework::settings::mixins::PortMixin::handle(optarg);
-    else if (letter == framework::settings::mixins::BufferSizeMixin::letter())
-      result = framework::settings::mixins::BufferSizeMixin::handle(optarg);
-    else if (letter == framework::settings::mixins::VerbosityMixin::letter())
-      result = framework::settings::mixins::VerbosityMixin::handle(optarg);
-    else if (letter == framework::settings::mixins::QuietMixin::letter())
-      result = framework::settings::mixins::QuietMixin::handle(optarg);
+    if (letter == cmdfw::settings::mixins::AddressMixin::letter())
+      result = cmdfw::settings::mixins::AddressMixin::handle(optarg);
+    else if (letter == cmdfw::settings::mixins::PortMixin::letter())
+      result = cmdfw::settings::mixins::PortMixin::handle(optarg);
+    else if (letter == cmdfw::settings::mixins::BufferSizeMixin::letter())
+      result = cmdfw::settings::mixins::BufferSizeMixin::handle(optarg);
+    else if (letter == cmdfw::settings::mixins::VerbosityMixin::letter())
+      result = cmdfw::settings::mixins::VerbosityMixin::handle(optarg);
+    else if (letter == cmdfw::settings::mixins::QuietMixin::letter())
+      result = cmdfw::settings::mixins::QuietMixin::handle(optarg);
     else
       return 1;
 
@@ -78,21 +81,21 @@ struct Settings:
 
   /* override */ virtual bool validate(){
     bool success = true;
-    if (!framework::settings::mixins::AddressMixin::is_set()){
+    if (!cmdfw::settings::mixins::AddressMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::AddressMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::AddressMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::PortMixin::is_set()){
+    if (!cmdfw::settings::mixins::PortMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::PortMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::PortMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::BufferSizeMixin::is_set()){
+    if (!cmdfw::settings::mixins::BufferSizeMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::VerbosityMixin::is_set()){
+    if (!cmdfw::settings::mixins::VerbosityMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::VerbosityMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::VerbosityMixin::letter() << "' is required.\n";
     }
     return success;
   }
@@ -100,31 +103,31 @@ struct Settings:
 
 struct CxxIoSettings:
   public Settings,
-  public framework::settings::mixins::CxxIoInputMixin,
-  public framework::settings::mixins::CxxIoOutputMixin {
+  public cmdfw::settings::mixins::CxxIoInputMixin,
+  public cmdfw::settings::mixins::CxxIoOutputMixin {
 
   /* override */ virtual std::string options() const{
     return Settings::options()
-      + framework::settings::mixins::CxxIoInputMixin::option()
-      + framework::settings::mixins::CxxIoOutputMixin::option();
+      + cmdfw::settings::mixins::CxxIoInputMixin::option()
+      + cmdfw::settings::mixins::CxxIoOutputMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
     return string() +
-      "-" + framework::settings::mixins::CxxIoInputMixin::letter()          + "\n"
-        "  " + framework::settings::mixins::CxxIoInputMixin::description()  + "\n"
-      "-" + framework::settings::mixins::CxxIoOutputMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::CxxIoOutputMixin::description() + "\n"
+      "-" + cmdfw::settings::mixins::CxxIoInputMixin::letter()          + "\n"
+        "  " + cmdfw::settings::mixins::CxxIoInputMixin::description()  + "\n"
+      "-" + cmdfw::settings::mixins::CxxIoOutputMixin::letter()         + "\n"
+        "  " + cmdfw::settings::mixins::CxxIoOutputMixin::description() + "\n"
       + Settings::options_help();
   }
 
   /* override */ virtual int handle(char letter, char * optarg){
     int result = Settings::handle(letter, optarg);
     if (result == 1){
-      if (letter == framework::settings::mixins::CxxIoInputMixin::letter())
-        result = framework::settings::mixins::CxxIoInputMixin::handle(optarg);
-      else if (letter == framework::settings::mixins::CxxIoOutputMixin::letter())
-        result = framework::settings::mixins::CxxIoOutputMixin::handle(optarg);
+      if (letter == cmdfw::settings::mixins::CxxIoInputMixin::letter())
+        result = cmdfw::settings::mixins::CxxIoInputMixin::handle(optarg);
+      else if (letter == cmdfw::settings::mixins::CxxIoOutputMixin::letter())
+        result = cmdfw::settings::mixins::CxxIoOutputMixin::handle(optarg);
       else
         return result;
 
@@ -146,13 +149,13 @@ struct CxxIoSettings:
 
   /* override */ virtual bool validate(){
     bool success = true;
-    if (!framework::settings::mixins::CxxIoInputMixin::is_set()){
+    if (!cmdfw::settings::mixins::CxxIoInputMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::CxxIoInputMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CxxIoInputMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::CxxIoOutputMixin::is_set()){
+    if (!cmdfw::settings::mixins::CxxIoOutputMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::CxxIoOutputMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CxxIoOutputMixin::letter() << "' is required.\n";
     }
       /*
        * Careful, Settings::validate() must fire even if success is already false.
@@ -164,31 +167,31 @@ struct CxxIoSettings:
 
 struct CIoSettings:
   public Settings,
-  public framework::settings::mixins::CIoInputMixin,
-  public framework::settings::mixins::CIoOutputMixin {
+  public cmdfw::settings::mixins::CIoInputMixin,
+  public cmdfw::settings::mixins::CIoOutputMixin {
 
   /* override */ virtual std::string options() const{
     return Settings::options()
-      + framework::settings::mixins::CIoInputMixin::option()
-      + framework::settings::mixins::CIoOutputMixin::option();
+      + cmdfw::settings::mixins::CIoInputMixin::option()
+      + cmdfw::settings::mixins::CIoOutputMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
     return string() +
-      "-" + framework::settings::mixins::CIoInputMixin::letter()          + "\n"
-        "  " + framework::settings::mixins::CIoInputMixin::description()  + "\n"
-      "-" + framework::settings::mixins::CIoOutputMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::CIoOutputMixin::description() + "\n"
+      "-" + cmdfw::settings::mixins::CIoInputMixin::letter()          + "\n"
+        "  " + cmdfw::settings::mixins::CIoInputMixin::description()  + "\n"
+      "-" + cmdfw::settings::mixins::CIoOutputMixin::letter()         + "\n"
+        "  " + cmdfw::settings::mixins::CIoOutputMixin::description() + "\n"
       + Settings::options_help();
   }
 
   /* override */ virtual int handle(char letter, char * optarg){
     int result = Settings::handle(letter, optarg);
     if (result == 1){
-      if (letter == framework::settings::mixins::CIoInputMixin::letter())
-        result = framework::settings::mixins::CIoInputMixin::handle(optarg);
-      else if (letter == framework::settings::mixins::CIoOutputMixin::letter())
-        result = framework::settings::mixins::CIoOutputMixin::handle(optarg);
+      if (letter == cmdfw::settings::mixins::CIoInputMixin::letter())
+        result = cmdfw::settings::mixins::CIoInputMixin::handle(optarg);
+      else if (letter == cmdfw::settings::mixins::CIoOutputMixin::letter())
+        result = cmdfw::settings::mixins::CIoOutputMixin::handle(optarg);
       else
         return result;
 
@@ -210,13 +213,13 @@ struct CIoSettings:
 
   /* override */ virtual bool validate(){
     bool success = true;
-    if (!framework::settings::mixins::CIoInputMixin::is_set()){
+    if (!cmdfw::settings::mixins::CIoInputMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::CIoInputMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CIoInputMixin::letter() << "' is required.\n";
     }
-    if (!framework::settings::mixins::CIoOutputMixin::is_set()){
+    if (!cmdfw::settings::mixins::CIoOutputMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::CIoOutputMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CIoOutputMixin::letter() << "' is required.\n";
     }
       /*
        * Careful, Settings::validate() must fire even if success is already false.
@@ -233,21 +236,21 @@ struct MultiprotoSettings: public CxxIoSettings{
 
   /* override */ virtual std::string options() const{
     return CxxIoSettings::options() +
-      framework::settings::mixins::SocketTypeMixin::option();
+      cmdfw::settings::mixins::SocketTypeMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
     return string() +
-      "-" + framework::settings::mixins::SocketTypeMixin::letter()         + "\n"
-        "  " + framework::settings::mixins::SocketTypeMixin::description() + "\n"
+      "-" + cmdfw::settings::mixins::SocketTypeMixin::letter()         + "\n"
+        "  " + cmdfw::settings::mixins::SocketTypeMixin::description() + "\n"
       + CxxIoSettings::options_help();
   }
 
   /* override */ virtual int handle(char letter, char * optarg){
     int result = CxxIoSettings::handle(letter, optarg);
     if (result == 1){
-      if (letter == framework::settings::mixins::SocketTypeMixin::letter())
-        result = framework::settings::mixins::SocketTypeMixin::handle(optarg);
+      if (letter == cmdfw::settings::mixins::SocketTypeMixin::letter())
+        result = cmdfw::settings::mixins::SocketTypeMixin::handle(optarg);
       else
         return result;
 
@@ -269,9 +272,9 @@ struct MultiprotoSettings: public CxxIoSettings{
 
   /* override */ virtual bool validate(){
     bool success = true;
-    if (!framework::settings::mixins::SocketTypeMixin::is_set()){
+    if (!cmdfw::settings::mixins::SocketTypeMixin::is_set()){
       success = false;
-      cerr << "ERROR: Option '-" << framework::settings::mixins::SocketTypeMixin::letter() << "' is required.\n";
+      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::SocketTypeMixin::letter() << "' is required.\n";
     }
       /*
        * Careful, Settings::validate() must fire even if success is already false.
@@ -285,18 +288,44 @@ typedef MultiprotoSettings SimpleSettings, MtSettings;
 
 
 typedef vector<__int8_t> Buffer;
-typedef bool (*Handler)(Settings * settings, int s);
-typedef framework::Framework<Handler> ThisFramework;
+typedef bool (*Handler)(Settings & settings, int s);
+
+bool invoke_handler(Handler handler, Settings & settings);
+
+bool simple_handler(Settings & settings_, int s);
+bool select_windows_handler(Settings & settings_, int s);
+bool select_unix_handler(Settings & settings_, int s);
+bool mt_handler(Settings & settings_, int s);
+
+
+template <typename TSettings> class ModeBase: public cmdfw::mode::Mode {
+public:
+
+  ModeBase(const string & name, const string & description, Handler handler):
+    cmdfw::mode::Mode(name, description), handler_(handler) { }
+  ModeBase(const vector<string> & names, const string & description, Handler handler):
+    cmdfw::mode::Mode(names, description), handler_(handler) { }
+
+  /* override */ virtual cmdfw::settings::Base * settings() const {
+    return new TSettings();
+  }
+
+  /* override */ virtual bool handle(cmdfw::settings::Base & settings) const {
+    return invoke_handler(handler_, static_cast<Settings &>(settings));
+  }
+
+private:
+  Handler handler_;
+};
 
 
 Logger logger;
 
 
-bool invoke_handler(Handler handler, framework::settings::Base * settings_){
-  Settings * settings = static_cast<Settings *>(settings_);
+bool invoke_handler(Handler handler, Settings & settings){
   logger.setLevel(
-    (settings->verbosity > 0) ? TRACE :
-      (settings->quiet ? WARN : INFO));
+    (settings.verbosity > 0) ? TRACE :
+      (settings.quiet ? WARN : INFO));
 
   bool ret = false;
 
@@ -314,10 +343,10 @@ bool invoke_handler(Handler handler, framework::settings::Base * settings_){
 
   addrinfo hints = {0};
   hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-  hints.ai_socktype = settings->socket_type;
+  hints.ai_socktype = settings.socket_type;
   if (getaddrinfo(
-        settings->addr.c_str(),
-        settings->port.c_str(),
+        settings.addr.c_str(),
+        settings.port.c_str(),
         &hints, &res) != 0){
     logger.writer(ERROR_) << "Could not resolve IP address and/or port.\n";
     goto run_return;
@@ -348,18 +377,18 @@ run_return:
   return ret;
 }
 
-bool simple_handler(Settings * settings_, int s){
-  SimpleSettings * settings = static_cast<SimpleSettings *>(settings_);
+bool simple_handler(Settings & settings_, int s){
+  SimpleSettings & settings = static_cast<SimpleSettings &>(settings_);
 
-  istream & input = settings->get_input();
-  ostream & output = settings->get_output();
+  istream & input = settings.get_input();
+  ostream & output = settings.get_output();
 
-  Buffer buffer(settings->buffer_size);
+  Buffer buffer(settings.buffer_size);
   __int8_t * const buf = &buffer[0];
 
   while (!input.eof()){
 
-    input.read(reinterpret_cast<char *>(buf), settings->buffer_size / sizeof(char));
+    input.read(reinterpret_cast<char *>(buf), settings.buffer_size / sizeof(char));
     int count = input.gcount() * sizeof(char);
     if (count == 0)
       continue;
@@ -379,7 +408,7 @@ bool simple_handler(Settings * settings_, int s){
 
     int recv_total = 0;
     while (recv_total < count){
-      int recv_current = recv(s, buf + recv_total, settings->buffer_size - recv_total, 0);
+      int recv_current = recv(s, buf + recv_total, settings.buffer_size - recv_total, 0);
       if (recv_current == -1){
         SOCKETS_PERROR("ERROR: recv");
         return false;
@@ -396,13 +425,13 @@ bool simple_handler(Settings * settings_, int s){
   return true;
 }
 
-bool select_windows_handler(Settings * settings_, int s){
-  SelectWindowsSettings * settings = static_cast<SelectWindowsSettings *>(settings_);
+bool select_windows_handler(Settings & settings_, int s){
+  SelectWindowsSettings & settings = static_cast<SelectWindowsSettings &>(settings_);
 
-  istream & input = settings->get_input();
-  ostream & output = settings->get_output();
+  istream & input = settings.get_input();
+  ostream & output = settings.get_output();
 
-  Buffer buffer(settings->buffer_size);
+  Buffer buffer(settings.buffer_size);
   __int8_t * const buf = &buffer[0];
 
   bool stdin_eof = false;
@@ -423,7 +452,7 @@ bool select_windows_handler(Settings * settings_, int s){
     }
 
     if (FD_ISSET(s, &rset)){
-      int received = recv(s, buf, settings->buffer_size, 0);
+      int received = recv(s, buf, settings.buffer_size, 0);
       if (received == -1){
         SOCKETS_PERROR("ERROR: recv");
         return false;
@@ -446,7 +475,7 @@ bool select_windows_handler(Settings * settings_, int s){
     }
 
     if (FD_ISSET(s, &wset)){
-      input.read(reinterpret_cast<char *>(buf), settings->buffer_size / sizeof(char));
+      input.read(reinterpret_cast<char *>(buf), settings.buffer_size / sizeof(char));
       int count = input.gcount() * sizeof(char);
       if (count == 0){
         logger.writer(INFO) << "EOF at input.\n";
@@ -475,14 +504,14 @@ bool select_windows_handler(Settings * settings_, int s){
   /*
    * In Unix we can pass to select() file descriptors.
    */
-bool select_unix_handler(Settings * settings_, int s){
-  SelectUnixSettings * settings = static_cast<SelectUnixSettings *>(settings_);
+bool select_unix_handler(Settings & settings_, int s){
+  SelectUnixSettings & settings = static_cast<SelectUnixSettings &>(settings_);
 
-  int input = fileno(settings->get_input());
-  int output = fileno(settings->get_output());
+  int input = fileno(settings.get_input());
+  int output = fileno(settings.get_output());
 
-  ReadWriteBuffer to(settings->buffer_size);
-  ReadWriteBuffer from(settings->buffer_size);
+  ReadWriteBuffer to(settings.buffer_size);
+  ReadWriteBuffer from(settings.buffer_size);
 
   enum{
     STATE_NORMAL,
@@ -713,71 +742,55 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
   #endif
 }
 
-bool mt_handler(Settings * settings_, int s){
-  MtSettings * settings = static_cast<MtSettings *>(settings_);
+bool mt_handler(Settings & settings_, int s){
+  MtSettings & settings = static_cast<MtSettings &>(settings_);
 
-  istream & input = settings->get_input();
-  ostream & output = settings->get_output();
+  istream & input = settings.get_input();
+  ostream & output = settings.get_output();
 
   #ifdef UNIX
     pid_t childpid = fork();
     if (childpid)
-      return mt_mainprocess(s, settings->socket_type, settings->buffer_size, input, childpid);
+      return mt_mainprocess(s, settings.socket_type, settings.buffer_size, input, childpid);
     else{
-      mt_subprocess(s, settings->buffer_size, output);
+      mt_subprocess(s, settings.buffer_size, output);
       exit(0);
     }
   #endif
   #ifdef WIN32
     mt_subprocess_data * data = new mt_subprocess_data;
     data->s = s;
-    data->buffer_size = settings->buffer_size;
+    data->buffer_size = settings.buffer_size;
     data->output = &output;
     HANDLE childthread = CreateThread(0, 0, mt_subprocess, data, 0, 0);
-    return mt_mainprocess(s, settings->socket_type, settings->buffer_size, input, childthread);
+    return mt_mainprocess(s, settings.socket_type, settings.buffer_size, input, childthread);
   #endif
 }
 
 } // namespace
 
 int main(int argc, char ** argv){
-  SimpleSettings        simple_settings;
-  SelectWindowsSettings select_windows_settings;
-  SelectUnixSettings    select_unix_settings;
-  MtSettings            mt_settings;
+  cmdfw::mode::Modes modes;
+  vector<string> names;
 
-  vector<string> select_windows_mode_names;
+  modes.push_back(new ModeBase<SimpleSettings>("simple", "Simple client.", simple_handler));
+
+  names.clear();
   #ifdef WIN32
-    select_windows_mode_names.push_back("select");
+    names.push_back("select");
   #endif
-  select_windows_mode_names.push_back("select-windows");
+  names.push_back("select-windows");
+  modes.push_back(new ModeBase<SelectWindowsSettings>(names,
+    "Client implemented using select() function.", select_windows_handler));
 
-  vector<string> mt_mode_names;
-  mt_mode_names.push_back("multithreaded");
-  mt_mode_names.push_back("mt");
-
-  ThisFramework::Modes modes;
-  modes.push_back(ThisFramework::ModeDescription(
-    "simple",
-    "Simple client.",
-    &simple_settings,
-    &simple_handler));
-  modes.push_back(ThisFramework::ModeDescription(
-    select_windows_mode_names,
-    "Client implemented using select() function.",
-    &select_windows_settings,
-    &select_windows_handler));
   #ifdef UNIX
-    modes.push_back(ThisFramework::ModeDescription(
-      "select",
+    modes.push_back(new ModeBase<SelectUnixSettings>("select",
       "Client implemented using select() with Unix-specific optimizations.",
-      &select_unix_settings,
-      &select_unix_handler));
+      select_unix_handler));
   #endif
-  modes.push_back(ThisFramework::ModeDescription(
-    mt_mode_names,
-    "Multiprocess (on Unix) / multithreaded (on Windows) client.",
-    &mt_settings,
-    &mt_handler));
-  return ThisFramework::run("client", argc, argv, modes, invoke_handler) ? 0 : 1;
+
+  modes.push_back(new ModeBase<MtSettings>("mt",
+    "Multithreaded (on Unix) / multiprocess (on Windows) client.", mt_handler));
+
+  return cmdfw::framework::run("client", argc, argv, cmdfw::factory::Factory(modes)) ? 0 : 1;
 }
