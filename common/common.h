@@ -11,6 +11,7 @@
   #include <ws2tcpip.h>
 #else
   #include <cerrno>
+  #include <cstdio> /* for `perror()' */
   #include <fcntl.h>
   #include <netdb.h>
   #include <sys/socket.h>
