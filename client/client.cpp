@@ -287,7 +287,7 @@ struct MultiprotoSettings: public CxxIoSettings{
 typedef MultiprotoSettings SimpleSettings, MtSettings;
 
 
-typedef vector<__int8_t> Buffer;
+typedef vector<int8_t> Buffer;
 typedef bool (*Handler)(Settings & settings, int s);
 
 bool invoke_handler(Handler handler, Settings & settings);
@@ -384,7 +384,7 @@ bool simple_handler(Settings & settings_, int s){
   ostream & output = settings.get_output();
 
   Buffer buffer(settings.buffer_size);
-  __int8_t * const buf = &buffer[0];
+  int8_t * const buf = &buffer[0];
 
   while (!input.eof()){
 
@@ -432,7 +432,7 @@ bool select_windows_handler(Settings & settings_, int s){
   ostream & output = settings.get_output();
 
   Buffer buffer(settings.buffer_size);
-  __int8_t * const buf = &buffer[0];
+  int8_t * const buf = &buffer[0];
 
   bool stdin_eof = false;
 
@@ -629,7 +629,7 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
   bool ret = true;
 
   Buffer buffer(buffer_size);
-  __int8_t * const buf = &buffer[0];
+  int8_t * const buf = &buffer[0];
 
   while (true){
     input.read(reinterpret_cast<char *>(buf), buffer_size / sizeof(char));
@@ -710,7 +710,7 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
 #endif
 
   Buffer buffer(buffer_size);
-  __int8_t * const buf = &buffer[0];
+  int8_t * const buf = &buffer[0];
 
   while (true){
     int count = recv(s, buf, buffer_size, 0 /* flags */ );

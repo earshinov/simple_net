@@ -179,7 +179,7 @@ typedef Settings UdpSetting, SelectSettings;
 typedef LimitSettings TcpSettings, LibevSettings;
 
 
-typedef vector<__int8_t> Buffer;
+typedef vector<int8_t> Buffer;
 typedef bool (*Handler)(Settings & settings, int s);
 
 bool invoke_handler(Handler handler, Settings & settings);
@@ -216,7 +216,7 @@ private:
 
 bool udp_handler(Settings & settings, int s){
   Buffer buffer(settings.buffer_size);
-  __int8_t * buf = &buffer[0];
+  int8_t * buf = &buffer[0];
 
   for (;;){
       /*
@@ -280,7 +280,7 @@ void sig_chld(int signal){
 #endif
 
   Buffer buffer(buffer_size);
-  __int8_t * buf = &buffer[0];
+  int8_t * buf = &buffer[0];
 
   for (;;){
     int count = recv(c, buf, buffer_size, 0);

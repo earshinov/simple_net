@@ -21,12 +21,12 @@
 /* Miscellaneous defines */
 
 #ifdef _MSC_VER
-  #define __int8_t __int8
-  #define __uint8_t unsigned __int8
-  #define __int16_t __int16
-  #define __uint16_t unsigned __int16
-  #define __int32_t __int32
-  #define __uint32_t unsigned __int32
+  typedef __int8 int8_t;
+  typedef unsigned __int8 uint8_t;
+  typedef __int16 int16_t;
+  typedef unsigned __int16 uint16_t;
+  typedef __int32 int32_t;
+  typedef unsigned __int32 uint32_t;
 #endif
 
 /* Socket function defines */
@@ -54,7 +54,7 @@
     return fcntl(s, F_SETFL, flags & ~O_NONBLOCK);
   }
 
-  inline void sleep_(__uint8_t seconds){
+  inline void sleep_(uint8_t seconds){
     sleep(seconds);
   }
 #endif
@@ -87,7 +87,7 @@
     return closesocket(s);
   }
 
-  inline void sleep_(unsigned __int8_t seconds){
+  inline void sleep_(uint8_t seconds){
     return Sleep(seconds * 1000);
   }
 
@@ -144,7 +144,7 @@ Target lexical_cast(Source const & arg){
 
 class ReadWriteBuffer{
 public:
-  typedef std::vector<__int8_t>::iterator iterator;
+  typedef std::vector<int8_t>::iterator iterator;
 
   ReadWriteBuffer(int buffer_size):
     buffer_(buffer_size),
@@ -225,7 +225,7 @@ public:
   }
 
 private:
-  std::vector<__int8_t> buffer_;
+  std::vector<int8_t> buffer_;
   const iterator begin_;
   const iterator end_;
   iterator snd_;

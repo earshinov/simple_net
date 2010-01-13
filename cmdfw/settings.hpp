@@ -48,7 +48,7 @@ namespace mixins{
 
   struct Base{
       /*
-       * Currently we do not polymorphic behaviour,
+       * Currently we do not use polymorphic behaviour,
        * so there is no need to make this function virtual.
        */
     bool is_set() const {
@@ -144,12 +144,12 @@ namespace mixins{
     std::string option() const { return "p:"; }
     std::string description() const { return "Port. Default: 28635."; }
 
-    __uint16_t port;
+    uint16_t port;
     PortNumberMixin(): port(28635) {}
 
     int handle(char * optarg){
       try{
-        port = dirty_lexical_cast::lexical_cast<__uint16_t>(optarg);
+        port = dirty_lexical_cast::lexical_cast<uint16_t>(optarg);
       }
       catch(dirty_lexical_cast::bad_lexical_cast &){
         std::cerr << "ERROR: Port must be integer: " << optarg << '\n';
