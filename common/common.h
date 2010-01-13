@@ -87,7 +87,7 @@
   }
 
   inline void sleep_(unsigned __int8_t seconds){
-	return Sleep(seconds * 1000);
+    return Sleep(seconds * 1000);
   }
 
   #define SHUT_WR SD_SEND
@@ -147,40 +147,50 @@ public:
 
   ReadWriteBuffer(int buffer_size):
     buffer_(buffer_size),
-	begin_(buffer_.begin()),
+    begin_(buffer_.begin()),
     end_(buffer_.end()),
     snd_(begin_),
-	rd_(begin_){
+    rd_(begin_),
+    overwrite(false){
   }
 
   ReadWriteBuffer(const ReadWriteBuffer & other):
     buffer_(other.buffer_),
-	begin_(buffer_.begin()),
-	end_(buffer_.end()),
-	snd_(begin_ + (other.snd_ - other.begin_)),
-	rd_(begin_ + (other.rd_ - other.begin_)){
+    begin_(buffer_.begin()),
+    end_(buffer_.end()),
+    snd_(begin_ + (other.snd_ - other.begin_)),
+    rd_(begin_ + (other.rd_ - other.begin_)),
+    overwrite(other.overwrite){
   }
 
   bool empty() const{
-    return snd_ == begin_ && rd_ == begin_;
+    return !overwrite && snd_ == begin_ && rd_ == begin_;
   }
 
   iterator rd_begin(){
-    return rd_;
+    return overwrite ? begin_ : rd_;
   }
   iterator rd_end(){
-    return end_;
+    return overwrite ? snd_ : end_;
   }
-  size_t rd_size() const{
-    return end_ - rd_;
+  size_t rd_size(){
+    return rd_end() - rd_begin();
   }
-  bool rd_empty() const{
-    return rd_ == end_;
+  bool rd_empty(){
+    return rd_end() == rd_begin();
   }
   void rd_advance(int distance){
     assert(distance >= 0);
     rd_ += distance;
-    assert(rd_ <= end_);
+    if (!overwrite){
+      assert(rd_ <= end_);
+      if (rd_ == end_){
+        rd_ = begin_;
+        overwrite = true;
+      }
+    }
+    else
+      assert(rd_ <= snd_);
   }
 
   iterator snd_begin(){
@@ -189,19 +199,28 @@ public:
   iterator snd_end(){
     return rd_;
   }
-  size_t snd_size() const{
-    return rd_ - snd_;
+  size_t snd_size(){
+    return (overwrite ? end_ : rd_) - snd_;
   }
-  bool snd_empty() const{
-    return snd_ == rd_;
+  bool snd_empty(){
+    return snd_size() == 0;
   }
   void snd_advance(int distance){
     assert(distance >= 0);
     snd_ += distance;
-    assert(snd_ <= rd_);
 
-    if (snd_ == rd_)
-      rd_ = snd_ = begin_;
+    if (!overwrite){
+      assert(snd_ <= rd_);
+      if (snd_ == rd_)
+        snd_ = rd_ = begin_;
+    }
+    else{
+      assert(snd_ <= end_);
+      if (snd_ == end_){
+        snd_ = begin_;
+        overwrite = false;
+      }
+    }
   }
 
 private:
@@ -210,4 +229,5 @@ private:
   const iterator end_;
   iterator snd_;
   iterator rd_;
+  bool overwrite;
 };
