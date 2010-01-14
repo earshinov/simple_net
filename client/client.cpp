@@ -790,7 +790,7 @@ int main(int argc, char ** argv){
   #endif
 
   modes.push_back(new ModeBase<MtSettings>("mt",
-    "Multithreaded (on Unix) / multiprocess (on Windows) client.", mt_handler));
+    "Multiprocess (on Unix) / multithreaded (on Windows) client.", mt_handler));
 
   return cmdfw::framework::run("client", argc, argv, cmdfw::factory::Factory(modes)) ? 0 : 1;
 }
