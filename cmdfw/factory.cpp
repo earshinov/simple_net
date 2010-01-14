@@ -1,5 +1,4 @@
 #include "factory.hpp"
-#include "mode.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -9,7 +8,7 @@ using namespace std;
 namespace cmdfw {
 namespace factory {
 
-const mode::Mode * Factory::mode(const std::string & name) const{
+const mode::BasicMode * Factory::mode(const std::string & name) const{
   mode::Modes::const_iterator it = modes_.begin();
   const mode::Modes::const_iterator end = modes_.end();
   for (; it != end; ++it)

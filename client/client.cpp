@@ -13,305 +13,175 @@ using namespace std;
 
 namespace{
 
-class Settings:
-  public cmdfw::settings::Base,
-  public cmdfw::settings::mixins::SocketTypeMixin,
-  public cmdfw::settings::mixins::AddressMixin,
-  public cmdfw::settings::mixins::PortMixin,
-  public cmdfw::settings::mixins::BufferSizeMixin,
-  public cmdfw::settings::mixins::VerbosityMixin,
-  public cmdfw::settings::mixins::QuietMixin{
+struct AllOptentries {
+
+  /* GeneralOptentries */
+  cmdfw::optentries::SocketType socket_type;
+  cmdfw::optentries::Hostname addr;
+  cmdfw::optentries::Port port;
+  cmdfw::optentries::BufferSize buffer_size;
+  cmdfw::optentries::Verbosity verbosity;
+  cmdfw::optentries::Quiet quiet;
+
+  /* CxxIoOptentries */
+  cmdfw::optentries::CxxIoInput cxxio_input;
+  cmdfw::optentries::CxxIoOutput cxxio_output;
+
+  /* CIoOptentries */
+  cmdfw::optentries::CIoInput cio_input;
+  cmdfw::optentries::CIoOutput cio_output;
+
+} OPTENTRIES;
+
+class GeneralOptentries: public cmdfw::optentries::Optentries {
+
+public:
+  GeneralOptentries():
+    cmdfw::optentries::Optentries(entries) {}
+protected:
+  GeneralOptentries(cmdfw::optentries::BasicOptentry ** entries):
+    cmdfw::optentries::Optentries(entries) {}
+
 public:
 
-  /*
-   * NOTE: SocketTypeMixin is not mentioned in methods as we do not want this
-   * option to be available in all modes (to be precise, in "select" mode).
-   */
+  cmdfw::optentries::SocketType::value_t & socket_type(){ return OPTENTRIES.socket_type.socket_type; }
+  cmdfw::optentries::Hostname::value_t & addr(){ return OPTENTRIES.addr.addr; }
+  cmdfw::optentries::Port::value_t & port(){ return OPTENTRIES.port.port; }
+  cmdfw::optentries::BufferSize::value_t & buffer_size(){ return OPTENTRIES.buffer_size.buffer_size; }
+  cmdfw::optentries::Verbosity::value_t & verbosity(){ return OPTENTRIES.verbosity.verbosity; }
+  cmdfw::optentries::Quiet::value_t & quiet(){ return OPTENTRIES.quiet.quiet; }
 
-  /* override */ virtual std::string options() const{
-    return
-      cmdfw::settings::mixins::AddressMixin::option() +
-      cmdfw::settings::mixins::PortMixin::option() +
-      cmdfw::settings::mixins::BufferSizeMixin::option() +
-      cmdfw::settings::mixins::VerbosityMixin::option() +
-      cmdfw::settings::mixins::QuietMixin::option();
-  }
+protected:
 
-  /* override */ virtual std::string options_help() const{
-    return string() +
-      "-" + cmdfw::settings::mixins::AddressMixin::letter()            + "\n"
-        "  " + cmdfw::settings::mixins::AddressMixin::description()    + "\n"
-      "-" + cmdfw::settings::mixins::PortMixin::letter()               + "\n"
-        "  " + cmdfw::settings::mixins::PortMixin::description()       + "\n"
-      "-" + cmdfw::settings::mixins::BufferSizeMixin::letter()         + "\n"
-        "  " + cmdfw::settings::mixins::BufferSizeMixin::description() + "\n"
-      "-" + cmdfw::settings::mixins::VerbosityMixin::letter()          + "\n"
-        "  " + cmdfw::settings::mixins::VerbosityMixin::description()  + "\n"
-      "-" + cmdfw::settings::mixins::QuietMixin::letter()              + "\n"
-        "  " + cmdfw::settings::mixins::QuietMixin::description()      + "\n";
-  }
-
-  /* override */ virtual int handle(char letter, char * optarg){
-    int result;
-    if (letter == cmdfw::settings::mixins::AddressMixin::letter())
-      result = cmdfw::settings::mixins::AddressMixin::handle(optarg);
-    else if (letter == cmdfw::settings::mixins::PortMixin::letter())
-      result = cmdfw::settings::mixins::PortMixin::handle(optarg);
-    else if (letter == cmdfw::settings::mixins::BufferSizeMixin::letter())
-      result = cmdfw::settings::mixins::BufferSizeMixin::handle(optarg);
-    else if (letter == cmdfw::settings::mixins::VerbosityMixin::letter())
-      result = cmdfw::settings::mixins::VerbosityMixin::handle(optarg);
-    else if (letter == cmdfw::settings::mixins::QuietMixin::letter())
-      result = cmdfw::settings::mixins::QuietMixin::handle(optarg);
-    else
-      return 1;
-
-    switch(result){
-      case 0:
-        return 0;
-      case 1:
-        return 2;
-      case 2:
-        return 3;
-      default:
-        assert(false);
-        return 3;
-    }
-  }
-
-  /* override */ virtual bool validate(){
-    bool success = true;
-    if (!cmdfw::settings::mixins::AddressMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::AddressMixin::letter() << "' is required.\n";
-    }
-    if (!cmdfw::settings::mixins::PortMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::PortMixin::letter() << "' is required.\n";
-    }
-    if (!cmdfw::settings::mixins::BufferSizeMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::BufferSizeMixin::letter() << "' is required.\n";
-    }
-    if (!cmdfw::settings::mixins::VerbosityMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::VerbosityMixin::letter() << "' is required.\n";
-    }
-    return success;
-  }
+  static cmdfw::optentries::BasicOptentry * entries[];
 };
 
-struct CxxIoSettings:
-  public Settings,
-  public cmdfw::settings::mixins::CxxIoInputMixin,
-  public cmdfw::settings::mixins::CxxIoOutputMixin {
-
-  /* override */ virtual std::string options() const{
-    return Settings::options()
-      + cmdfw::settings::mixins::CxxIoInputMixin::option()
-      + cmdfw::settings::mixins::CxxIoOutputMixin::option();
-  }
-
-  /* override */ virtual std::string options_help() const{
-    return string() +
-      "-" + cmdfw::settings::mixins::CxxIoInputMixin::letter()          + "\n"
-        "  " + cmdfw::settings::mixins::CxxIoInputMixin::description()  + "\n"
-      "-" + cmdfw::settings::mixins::CxxIoOutputMixin::letter()         + "\n"
-        "  " + cmdfw::settings::mixins::CxxIoOutputMixin::description() + "\n"
-      + Settings::options_help();
-  }
-
-  /* override */ virtual int handle(char letter, char * optarg){
-    int result = Settings::handle(letter, optarg);
-    if (result == 1){
-      if (letter == cmdfw::settings::mixins::CxxIoInputMixin::letter())
-        result = cmdfw::settings::mixins::CxxIoInputMixin::handle(optarg);
-      else if (letter == cmdfw::settings::mixins::CxxIoOutputMixin::letter())
-        result = cmdfw::settings::mixins::CxxIoOutputMixin::handle(optarg);
-      else
-        return result;
-
-      switch(result){
-        case 0:
-          return 0;
-        case 1:
-          return 2;
-        case 2:
-          return 3;
-        default:
-          assert(false);
-          return 3;
-      }
-    }
-    else
-      return result;
-  }
-
-  /* override */ virtual bool validate(){
-    bool success = true;
-    if (!cmdfw::settings::mixins::CxxIoInputMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CxxIoInputMixin::letter() << "' is required.\n";
-    }
-    if (!cmdfw::settings::mixins::CxxIoOutputMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CxxIoOutputMixin::letter() << "' is required.\n";
-    }
-      /*
-       * Careful, Settings::validate() must fire even if success is already false.
-       */
-    success = Settings::validate() && success;
-    return success;
-  }
+/* static */ cmdfw::optentries::BasicOptentry * GeneralOptentries::entries[] = {
+  //&OPTENTRIES.socket_type, /* hidden */
+  &OPTENTRIES.addr,
+  &OPTENTRIES.port,
+  &OPTENTRIES.buffer_size,
+  &OPTENTRIES.verbosity,
+  &OPTENTRIES.quiet,
+  0
 };
 
-struct CIoSettings:
-  public Settings,
-  public cmdfw::settings::mixins::CIoInputMixin,
-  public cmdfw::settings::mixins::CIoOutputMixin {
+struct CxxIoOptentries: public GeneralOptentries {
 
-  /* override */ virtual std::string options() const{
-    return Settings::options()
-      + cmdfw::settings::mixins::CIoInputMixin::option()
-      + cmdfw::settings::mixins::CIoOutputMixin::option();
-  }
+public:
+  CxxIoOptentries(): GeneralOptentries(entries) {}
+protected:
+  CxxIoOptentries(cmdfw::optentries::BasicOptentry ** entries): GeneralOptentries(entries) {}
 
-  /* override */ virtual std::string options_help() const{
-    return string() +
-      "-" + cmdfw::settings::mixins::CIoInputMixin::letter()          + "\n"
-        "  " + cmdfw::settings::mixins::CIoInputMixin::description()  + "\n"
-      "-" + cmdfw::settings::mixins::CIoOutputMixin::letter()         + "\n"
-        "  " + cmdfw::settings::mixins::CIoOutputMixin::description() + "\n"
-      + Settings::options_help();
-  }
-
-  /* override */ virtual int handle(char letter, char * optarg){
-    int result = Settings::handle(letter, optarg);
-    if (result == 1){
-      if (letter == cmdfw::settings::mixins::CIoInputMixin::letter())
-        result = cmdfw::settings::mixins::CIoInputMixin::handle(optarg);
-      else if (letter == cmdfw::settings::mixins::CIoOutputMixin::letter())
-        result = cmdfw::settings::mixins::CIoOutputMixin::handle(optarg);
-      else
-        return result;
-
-      switch(result){
-        case 0:
-          return 0;
-        case 1:
-          return 2;
-        case 2:
-          return 3;
-        default:
-          assert(false);
-          return 3;
-      }
-    }
-    else
-      return result;
-  }
-
-  /* override */ virtual bool validate(){
-    bool success = true;
-    if (!cmdfw::settings::mixins::CIoInputMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CIoInputMixin::letter() << "' is required.\n";
-    }
-    if (!cmdfw::settings::mixins::CIoOutputMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::CIoOutputMixin::letter() << "' is required.\n";
-    }
-      /*
-       * Careful, Settings::validate() must fire even if success is already false.
-       */
-    success = Settings::validate() && success;
-    return success;
-  }
-};
-
-typedef CxxIoSettings SelectWindowsSettings;
-typedef CIoSettings SelectUnixSettings;
-
-struct MultiprotoSettings: public CxxIoSettings{
-
-  /* override */ virtual std::string options() const{
-    return CxxIoSettings::options() +
-      cmdfw::settings::mixins::SocketTypeMixin::option();
-  }
-
-  /* override */ virtual std::string options_help() const{
-    return string() +
-      "-" + cmdfw::settings::mixins::SocketTypeMixin::letter()         + "\n"
-        "  " + cmdfw::settings::mixins::SocketTypeMixin::description() + "\n"
-      + CxxIoSettings::options_help();
-  }
-
-  /* override */ virtual int handle(char letter, char * optarg){
-    int result = CxxIoSettings::handle(letter, optarg);
-    if (result == 1){
-      if (letter == cmdfw::settings::mixins::SocketTypeMixin::letter())
-        result = cmdfw::settings::mixins::SocketTypeMixin::handle(optarg);
-      else
-        return result;
-
-      switch(result){
-        case 0:
-          return 0;
-        case 1:
-          return 2;
-        case 2:
-          return 3;
-        default:
-          assert(false);
-          return 3;
-      }
-    }
-    else
-      return result;
-  }
-
-  /* override */ virtual bool validate(){
-    bool success = true;
-    if (!cmdfw::settings::mixins::SocketTypeMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::SocketTypeMixin::letter() << "' is required.\n";
-    }
-      /*
-       * Careful, Settings::validate() must fire even if success is already false.
-       */
-    success = CxxIoSettings::validate() && success;
-    return success;
-  }
-};
-
-typedef MultiprotoSettings SimpleSettings, MtSettings;
-
-
-typedef vector<int8_t> Buffer;
-typedef bool (*Handler)(Settings & settings, int s);
-
-bool invoke_handler(Handler handler, Settings & settings);
-
-bool simple_handler(Settings & settings_, int s);
-bool select_windows_handler(Settings & settings_, int s);
-bool select_unix_handler(Settings & settings_, int s);
-bool mt_handler(Settings & settings_, int s);
-
-
-template <typename TSettings> class ModeBase: public cmdfw::mode::Mode {
 public:
 
-  ModeBase(const string & name, const string & description, Handler handler):
-    cmdfw::mode::Mode(name, description), handler_(handler) { }
-  ModeBase(const vector<string> & names, const string & description, Handler handler):
-    cmdfw::mode::Mode(names, description), handler_(handler) { }
+  istream & get_input(){ return OPTENTRIES.cxxio_input.get_input(); }
+  ostream & get_output(){ return OPTENTRIES.cxxio_output.get_output(); }
 
-  /* override */ virtual cmdfw::settings::Base * settings() const {
-    return new TSettings();
+protected:
+
+  static cmdfw::optentries::BasicOptentry * entries[];
+};
+
+/* static */ cmdfw::optentries::BasicOptentry * CxxIoOptentries::entries[] = {
+  &OPTENTRIES.cxxio_input,
+  &OPTENTRIES.cxxio_output,
+
+  /* GeneralOptentries */
+  &OPTENTRIES.addr,
+  &OPTENTRIES.port,
+  &OPTENTRIES.buffer_size,
+  &OPTENTRIES.verbosity,
+  &OPTENTRIES.quiet,
+  0
+};
+
+struct CIoOptentries: public GeneralOptentries {
+
+public:
+  CIoOptentries(): GeneralOptentries(entries) {}
+protected:
+  CIoOptentries(cmdfw::optentries::BasicOptentry ** entries): GeneralOptentries(entries) {}
+
+public:
+
+  FILE * get_input(){ return OPTENTRIES.cio_input.get_input(); }
+  FILE * get_output(){ return OPTENTRIES.cio_output.get_output(); }
+
+protected:
+
+  static cmdfw::optentries::BasicOptentry * entries[];
+};
+
+/* static */ cmdfw::optentries::BasicOptentry * CIoOptentries::entries[] = {
+  &OPTENTRIES.cio_input,
+  &OPTENTRIES.cio_output,
+
+  /* GeneralOptentries */
+  &OPTENTRIES.addr,
+  &OPTENTRIES.port,
+  &OPTENTRIES.buffer_size,
+  &OPTENTRIES.verbosity,
+  &OPTENTRIES.quiet,
+  0
+};
+
+typedef CxxIoOptentries SelectWindowsOptentries;
+typedef CIoOptentries SelectUnixOptentries;
+
+struct MultiprotoOptentries: public CxxIoOptentries{
+
+public:
+  MultiprotoOptentries(): CxxIoOptentries(entries) {}
+protected:
+  MultiprotoOptentries(cmdfw::optentries::BasicOptentry ** entries): CxxIoOptentries(entries) {}
+
+protected:
+
+  static cmdfw::optentries::BasicOptentry * entries[];
+};
+
+/* static */ cmdfw::optentries::BasicOptentry * MultiprotoOptentries::entries[] = {
+  &OPTENTRIES.socket_type,
+
+  /* CxxIoOptentries */
+  &OPTENTRIES.cxxio_input,
+  &OPTENTRIES.cxxio_output,
+
+  /* GeneralOptentries */
+  &OPTENTRIES.addr,
+  &OPTENTRIES.port,
+  &OPTENTRIES.buffer_size,
+  &OPTENTRIES.verbosity,
+  &OPTENTRIES.quiet,
+  0
+};
+
+typedef MultiprotoOptentries SimpleOptentries, MtOptentries;
+
+
+typedef bool (*Handler)(GeneralOptentries & optentries, int s);
+bool invoke_handler(Handler handler, GeneralOptentries & optentries);
+
+bool simple_handler(GeneralOptentries & optentries_, int s);
+bool select_windows_handler(GeneralOptentries & optentries_, int s);
+bool select_unix_handler(GeneralOptentries & optentries_, int s);
+bool mt_handler(GeneralOptentries & optentries_, int s);
+
+template <typename Optentries> class Mode: public cmdfw::mode::BasicMode {
+public:
+
+  Mode(const string & name, const string & description, Handler handler):
+    cmdfw::mode::BasicMode(name, description), handler_(handler) { }
+  Mode(const vector<string> & names, const string & description, Handler handler):
+    cmdfw::mode::BasicMode(names, description), handler_(handler) { }
+
+  /* override */ virtual auto_ptr<cmdfw::optentries::BasicOptentries> optentries() const {
+    return auto_ptr<cmdfw::optentries::BasicOptentries>(new Optentries());
   }
 
-  /* override */ virtual bool handle(cmdfw::settings::Base & settings) const {
-    return invoke_handler(handler_, static_cast<Settings &>(settings));
+  /* override */ virtual bool handle(cmdfw::optentries::BasicOptentries & optentries) const {
+    return invoke_handler(handler_, static_cast<GeneralOptentries &>(optentries));
   }
 
 private:
@@ -319,13 +189,14 @@ private:
 };
 
 
+typedef vector<int8_t> Buffer;
 Logger logger;
 
 
-bool invoke_handler(Handler handler, Settings & settings){
+bool invoke_handler(Handler handler, GeneralOptentries & optentries){
   logger.setLevel(
-    (settings.verbosity > 0) ? TRACE :
-      (settings.quiet ? WARN : INFO));
+    (optentries.verbosity() > 0) ? TRACE :
+      (optentries.quiet() ? WARN : INFO));
 
   bool ret = false;
 
@@ -343,10 +214,10 @@ bool invoke_handler(Handler handler, Settings & settings){
 
   addrinfo hints = {0};
   hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-  hints.ai_socktype = settings.socket_type;
+  hints.ai_socktype = optentries.socket_type();
   if (getaddrinfo(
-        settings.addr.c_str(),
-        settings.port.c_str(),
+        optentries.addr().c_str(),
+        optentries.port().c_str(),
         &hints, &res) != 0){
     logger.writer(ERROR_) << "Could not resolve IP address and/or port.\n";
     goto run_return;
@@ -368,7 +239,7 @@ bool invoke_handler(Handler handler, Settings & settings){
     goto run_return;
   }
 
-  ret = handler(settings, s);
+  ret = handler(optentries, s);
 run_return:
   if (res != 0)
     freeaddrinfo(res);
@@ -377,18 +248,19 @@ run_return:
   return ret;
 }
 
-bool simple_handler(Settings & settings_, int s){
-  SimpleSettings & settings = static_cast<SimpleSettings &>(settings_);
 
-  istream & input = settings.get_input();
-  ostream & output = settings.get_output();
+bool simple_handler(GeneralOptentries & optentries_, int s){
+  SimpleOptentries & optentries = static_cast<SimpleOptentries &>(optentries_);
 
-  Buffer buffer(settings.buffer_size);
+  istream & input = optentries.get_input();
+  ostream & output = optentries.get_output();
+
+  Buffer buffer(optentries.buffer_size());
   int8_t * const buf = &buffer[0];
 
   while (!input.eof()){
 
-    input.read(reinterpret_cast<char *>(buf), settings.buffer_size / sizeof(char));
+    input.read(reinterpret_cast<char *>(buf), optentries.buffer_size() / sizeof(char));
     int count = input.gcount() * sizeof(char);
     if (count == 0)
       continue;
@@ -408,7 +280,7 @@ bool simple_handler(Settings & settings_, int s){
 
     int recv_total = 0;
     while (recv_total < count){
-      int recv_current = recv(s, buf + recv_total, settings.buffer_size - recv_total, 0);
+      int recv_current = recv(s, buf + recv_total, optentries.buffer_size() - recv_total, 0);
       if (recv_current == -1){
         SOCKETS_PERROR("ERROR: recv");
         return false;
@@ -425,13 +297,13 @@ bool simple_handler(Settings & settings_, int s){
   return true;
 }
 
-bool select_windows_handler(Settings & settings_, int s){
-  SelectWindowsSettings & settings = static_cast<SelectWindowsSettings &>(settings_);
+bool select_windows_handler(GeneralOptentries & optentries_, int s){
+  SelectWindowsOptentries & optentries = static_cast<SelectWindowsOptentries &>(optentries_);
 
-  istream & input = settings.get_input();
-  ostream & output = settings.get_output();
+  istream & input = optentries.get_input();
+  ostream & output = optentries.get_output();
 
-  Buffer buffer(settings.buffer_size);
+  Buffer buffer(optentries.buffer_size());
   int8_t * const buf = &buffer[0];
 
   bool stdin_eof = false;
@@ -452,7 +324,7 @@ bool select_windows_handler(Settings & settings_, int s){
     }
 
     if (FD_ISSET(s, &rset)){
-      int received = recv(s, buf, settings.buffer_size, 0);
+      int received = recv(s, buf, optentries.buffer_size(), 0);
       if (received == -1){
         SOCKETS_PERROR("ERROR: recv");
         return false;
@@ -475,7 +347,7 @@ bool select_windows_handler(Settings & settings_, int s){
     }
 
     if (FD_ISSET(s, &wset)){
-      input.read(reinterpret_cast<char *>(buf), settings.buffer_size / sizeof(char));
+      input.read(reinterpret_cast<char *>(buf), optentries.buffer_size() / sizeof(char));
       int count = input.gcount() * sizeof(char);
       if (count == 0){
         logger.writer(INFO) << "EOF at input.\n";
@@ -504,14 +376,14 @@ bool select_windows_handler(Settings & settings_, int s){
   /*
    * In Unix we can pass to select() file descriptors.
    */
-bool select_unix_handler(Settings & settings_, int s){
-  SelectUnixSettings & settings = static_cast<SelectUnixSettings &>(settings_);
+bool select_unix_handler(GeneralOptentries & optentries_, int s){
+  SelectUnixOptentries & optentries = static_cast<SelectUnixOptentries &>(optentries_);
 
-  int input = fileno(settings.get_input());
-  int output = fileno(settings.get_output());
+  int input = fileno(optentries.get_input());
+  int output = fileno(optentries.get_output());
 
-  ReadWriteBuffer to(settings.buffer_size);
-  ReadWriteBuffer from(settings.buffer_size);
+  ReadWriteBuffer to(optentries.buffer_size());
+  ReadWriteBuffer from(optentries.buffer_size());
 
   enum{
     STATE_NORMAL,
@@ -742,28 +614,28 @@ bool mt_mainprocess(int s, int socket_type, int buffer_size, istream & input, HA
   #endif
 }
 
-bool mt_handler(Settings & settings_, int s){
-  MtSettings & settings = static_cast<MtSettings &>(settings_);
+bool mt_handler(GeneralOptentries & optentries_, int s){
+  MtOptentries & optentries = static_cast<MtOptentries &>(optentries_);
 
-  istream & input = settings.get_input();
-  ostream & output = settings.get_output();
+  istream & input = optentries.get_input();
+  ostream & output = optentries.get_output();
 
   #ifdef UNIX
     pid_t childpid = fork();
     if (childpid)
-      return mt_mainprocess(s, settings.socket_type, settings.buffer_size, input, childpid);
+      return mt_mainprocess(s, optentries.socket_type(), optentries.buffer_size(), input, childpid);
     else{
-      mt_subprocess(s, settings.buffer_size, output);
+      mt_subprocess(s, optentries.buffer_size(), output);
       exit(0);
     }
   #endif
   #ifdef WIN32
     mt_subprocess_data * data = new mt_subprocess_data;
     data->s = s;
-    data->buffer_size = settings.buffer_size;
+    data->buffer_size = optentries.buffer_size();
     data->output = &output;
     HANDLE childthread = CreateThread(0, 0, mt_subprocess, data, 0, 0);
-    return mt_mainprocess(s, settings.socket_type, settings.buffer_size, input, childthread);
+    return mt_mainprocess(s, optentries.socket_type(), optentries.buffer_size(), input, childthread);
   #endif
 }
 
@@ -773,23 +645,23 @@ int main(int argc, char ** argv){
   cmdfw::mode::Modes modes;
   vector<string> names;
 
-  modes.push_back(new ModeBase<SimpleSettings>("simple", "Simple client.", simple_handler));
+  modes.push_back(new Mode<SimpleOptentries>("simple", "Simple client.", simple_handler));
 
   names.clear();
   #ifdef WIN32
     names.push_back("select");
   #endif
   names.push_back("select-windows");
-  modes.push_back(new ModeBase<SelectWindowsSettings>(names,
+  modes.push_back(new Mode<SelectWindowsOptentries>(names,
     "Client implemented using select() function.", select_windows_handler));
 
   #ifdef UNIX
-    modes.push_back(new ModeBase<SelectUnixSettings>("select",
+    modes.push_back(new Mode<SelectUnixOptentries>("select",
       "Client implemented using select() with Unix-specific optimizations.",
       select_unix_handler));
   #endif
 
-  modes.push_back(new ModeBase<MtSettings>("mt",
+  modes.push_back(new Mode<MtOptentries>("mt",
     "Multiprocess (on Unix) / multithreaded (on Windows) client.", mt_handler));
 
   return cmdfw::framework::run("client", argc, argv, cmdfw::factory::Factory(modes)) ? 0 : 1;

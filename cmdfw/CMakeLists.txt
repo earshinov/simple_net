@@ -3,6 +3,6 @@ set(SOURCES
   framework.cpp framework.hpp
   factory.cpp factory.hpp
   mode.cpp mode.hpp
-  settings.cpp settings.hpp)
+  optentries.cpp optentries.hpp)
 
 add_library(cmdfw STATIC ${SOURCES})

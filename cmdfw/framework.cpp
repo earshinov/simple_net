@@ -1,7 +1,7 @@
 #include "factory.hpp"
 #include "framework.hpp"
 #include "mode.hpp"
-#include "settings.hpp"
+#include "optentries.hpp"
 
 #include "../common/common.h"
 
@@ -13,7 +13,7 @@ namespace {
 
 using namespace cmdfw;
 
-int parse_argv(int argc, char ** argv, settings::Base & settings){
+int parse_argv(int argc, char ** argv, optentries::BasicOptentries & optentries){
   /*
    * Return values:
    * 0 - everything is successful, continue;
@@ -22,7 +22,7 @@ int parse_argv(int argc, char ** argv, settings::Base & settings){
    * 3 - everything is successful, exit (exit code = 0).
    */
 
-  const std::string getopt_options = settings.options() + "h";
+  const std::string getopt_options = optentries.options() + "h";
   const char * const getopt_options_cstr = getopt_options.c_str();
 
   for (;;){
@@ -38,7 +38,7 @@ int parse_argv(int argc, char ** argv, settings::Base & settings){
         return 3;
       default:
 
-        switch (settings.handle(c, optarg)){
+        switch (optentries.handle(c, optarg)){
           case 0:
             break;
           case 1:
@@ -60,7 +60,7 @@ int parse_argv(int argc, char ** argv, settings::Base & settings){
     return 1;
   }
 
-  return settings.validate() ? 0 : 1;
+  return optentries.validate() ? 0 : 1;
 }
 
 } // namespace
@@ -90,7 +90,7 @@ bool run(
   }
   --argc, ++argv;
 
-  const mode::Mode * mode = factory.mode(mode_name);
+  const mode::BasicMode * mode = factory.mode(mode_name);
   if (!mode){
     cerr << "ERROR: Unknown mode: " << mode_name << '\n';
     factory.usage(cerr, executable_name);
@@ -98,20 +98,20 @@ bool run(
   }
 
   bool ret = false;
-  settings::Base * settings = mode->settings();
-  switch (parse_argv(argc, argv, *settings)){
+  auto_ptr<optentries::BasicOptentries> optentries = mode->optentries();
+  switch (parse_argv(argc, argv, *optentries)){
     case 0:
-      ret = mode->handle(*settings);
+      ret = mode->handle(*optentries);
       break;
     case 1:
-      mode->usage(cerr, executable_name, *settings);
+      mode->usage(cerr, executable_name, *optentries);
       ret = false;
       break;
     case 2:
       ret = false;
       break;
     case 3:
-      mode->usage(cout, executable_name, *settings);
+      mode->usage(cout, executable_name, *optentries);
       ret = true;
       break;
     default:
@@ -119,7 +119,6 @@ bool run(
       ret = false;
       break;
   }
-  delete settings;
   return ret;
 }
 

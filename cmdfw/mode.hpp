@@ -1,26 +1,24 @@
 #pragma once
 
+#include "optentries.hpp"
+
 #include <iosfwd>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace cmdfw {
-
-namespace settings {
-  class Base;
-}
-
 namespace mode {
 
-class Mode{
+class BasicMode{
 public:
 
-  virtual ~Mode(){
+  virtual ~BasicMode(){
   }
 
 public:
 
-  Mode(
+  BasicMode(
     const std::string & name_,
     const std::string & short_description_):
 
@@ -30,7 +28,7 @@ public:
     names.push_back(name_);
   }
 
-  Mode(
+  BasicMode(
       /*
        * Do not use map for names, because sort order may be important
        * (this is the order how mode names are presented to user in help).
@@ -48,11 +46,11 @@ public:
   void usage(
     std::ostream & o,
     const std::string & executable_name,
-    const settings::Base & settings) const;
+    const optentries::BasicOptentries & optentries) const;
 
-  virtual settings::Base * settings() const = 0;
+  virtual std::auto_ptr<optentries::BasicOptentries> optentries() const = 0;
 
-  virtual bool handle(settings::Base & settings) const = 0;
+  virtual bool handle(optentries::BasicOptentries & optentries) const = 0;
 
 public:
 
@@ -60,7 +58,7 @@ public:
   std::string short_description;
 };
 
-typedef std::vector<Mode *> Modes;
+typedef std::vector<BasicMode *> Modes;
 
 } // namespace mode
 } // namespace cmdfw

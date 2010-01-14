@@ -1,19 +1,10 @@
 #pragma once
 
+#include "factory.hpp"
+
 #include <string>
 
 namespace cmdfw {
-
-namespace mode {
-  class Mode;
-}
-namespace settings {
-  class Base;
-}
-namespace factory {
-  class Factory;
-}
-
 namespace framework {
 
 bool run(

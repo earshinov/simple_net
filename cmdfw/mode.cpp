@@ -1,5 +1,4 @@
 #include "mode.hpp"
-#include "settings.hpp"
 
 #include <iostream>
 using namespace std;
@@ -7,10 +6,10 @@ using namespace std;
 namespace cmdfw {
 namespace mode {
 
-void Mode::usage(
+void BasicMode::usage(
   std::ostream & o,
   const std::string & executable_name,
-  const settings::Base & settings) const {
+  const optentries::BasicOptentries & optentries) const {
 
   o << "Usage: " << executable_name << ' ';
 
@@ -37,7 +36,7 @@ void Mode::usage(
        "\n"
        "-h\n"
        "  Print this message and exit\n"
-    << settings.options_help();
+    << optentries.options_help();
 }
 
 } // namespace mode
