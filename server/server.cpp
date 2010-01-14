@@ -24,7 +24,6 @@ namespace{
 
 class Settings:
   public cmdfw::settings::Base,
-  public cmdfw::settings::mixins::AddressMixin,
   public cmdfw::settings::mixins::PortNumberMixin,
   public cmdfw::settings::mixins::BufferSizeMixin {
 public:
@@ -35,15 +34,12 @@ public:
 
   /* override */ virtual std::string options() const{
     return
-      cmdfw::settings::mixins::AddressMixin::option() +
       cmdfw::settings::mixins::PortNumberMixin::option() +
       cmdfw::settings::mixins::BufferSizeMixin::option();
   }
 
   /* override */ virtual std::string options_help() const{
     return string() +
-      "-" + cmdfw::settings::mixins::AddressMixin::letter()            + "\n"
-        "  " + cmdfw::settings::mixins::AddressMixin::description()    + "\n"
       "-" + cmdfw::settings::mixins::PortNumberMixin::letter()         + "\n"
         "  " + cmdfw::settings::mixins::PortNumberMixin::description() + "\n"
       "-" + cmdfw::settings::mixins::BufferSizeMixin::letter()         + "\n"
@@ -52,9 +48,7 @@ public:
 
   /* override */ virtual int handle(char letter, char * optarg){
     int result;
-    if (letter == cmdfw::settings::mixins::AddressMixin::letter())
-      result = cmdfw::settings::mixins::AddressMixin::handle(optarg);
-    else if (letter == cmdfw::settings::mixins::PortNumberMixin::letter())
+    if (letter == cmdfw::settings::mixins::PortNumberMixin::letter())
       result = cmdfw::settings::mixins::PortNumberMixin::handle(optarg);
     else if (letter == cmdfw::settings::mixins::BufferSizeMixin::letter())
       result = cmdfw::settings::mixins::BufferSizeMixin::handle(optarg);
@@ -76,10 +70,6 @@ public:
 
   /* override */ virtual bool validate(){
     bool success = true;
-    if (!cmdfw::settings::mixins::AddressMixin::is_set()){
-      success = false;
-      cerr << "ERROR: Option '-" << cmdfw::settings::mixins::AddressMixin::letter() << "' is required.\n";
-    }
     if (!cmdfw::settings::mixins::PortNumberMixin::is_set()){
       success = false;
       cerr << "ERROR: Option '-" << cmdfw::settings::mixins::PortNumberMixin::letter() << "' is required.\n";
@@ -175,7 +165,7 @@ public:
   }
 };
 
-typedef Settings UdpSetting, SelectSettings;
+typedef Settings SelectSettings;
 typedef LimitSettings TcpSettings, LibevSettings;
 
 
