@@ -3,6 +3,7 @@
 #include "../common/common.h"
 
 #include <fstream>
+#include <list>
 #include <string>
 
 namespace cmdfw {
@@ -64,7 +65,6 @@ public:
     return std::string();
   }
 
-  virtual int handle(char letter, char * optarg){
     /*
      * Return values:
      * 0 - everything successful, proceed;
@@ -72,10 +72,11 @@ public:
      * 2 - handler returned an error, print usage to stderr and exit (exit code = 1);
      * 3 - handler returned an error, exit (exit code = 1).
      */
+  virtual int handle(char letter, char * optarg){
     return 1;
   }
 
-  virtual bool validate(){
+  virtual bool validate() const{
     return true;
   }
 };
@@ -83,17 +84,20 @@ public:
 class Optentries: public BasicOptentries{
 public:
 
-  Optentries(BasicOptentry ** optentries):
-    optentries_(optentries) {}
+  Optentries() {}
 
   /* override */ virtual std::string options() const;
   /* override */ virtual std::string options_help() const;
   /* override */ virtual int handle(char letter, char * optarg);
-  /* override */ virtual bool validate();
+  /* override */ virtual bool validate() const;
+
+protected:
+
+  void append_optentries(BasicOptentry ** optentries){ optentries_.push_back(optentries); }
 
 private:
 
-  BasicOptentry ** optentries_;
+  std::list<BasicOptentry **> optentries_;
 };
 
 /* ---------------------------------------------------------------------------------------------- */

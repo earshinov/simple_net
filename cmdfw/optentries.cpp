@@ -8,24 +8,43 @@ using namespace std;
 namespace cmdfw {
 namespace optentries {
 
+#define FOREACH_OPTENTRY_BEGIN { \
+  list<BasicOptentry **>::iterator it = optentries_.begin(); \
+  const list<BasicOptentry **>::iterator end = optentries_.end(); \
+  for (; it != end; ++it){ \
+    for (BasicOptentry ** i = *it; *i; ++i){ \
+      BasicOptentry & optentry = **i;
+
+#define FOREACH_CONST_OPTENTRY_BEGIN { \
+  list<BasicOptentry **>::const_iterator it = optentries_.begin(); \
+  const list<BasicOptentry **>::const_iterator end = optentries_.end(); \
+  for (; it != end; ++it){ \
+    for (BasicOptentry ** i = *it; *i; ++i){ \
+      const BasicOptentry & optentry = **i;
+
+#define FOREACH_OPTENTRY_END }}}
+#define FOREACH_CONST_OPTENTRY_END FOREACH_OPTENTRY_END
+
 std::string Optentries::options() const{
   stringstream ss;
-  for (BasicOptentry ** i = optentries_; *i; ++i)
-    ss << (*i)->option();
+  FOREACH_CONST_OPTENTRY_BEGIN
+    ss << optentry.option();
+  FOREACH_CONST_OPTENTRY_END
   return ss.str();
 }
 
 std::string Optentries::options_help() const{
   stringstream ss;
-  for (BasicOptentry ** i = optentries_; *i; ++i)
-    ss << '-' << (*i)->letter() << '\n' << "  " << (*i)->description() << '\n';
+  FOREACH_CONST_OPTENTRY_BEGIN
+    ss << '-' << optentry.letter() << '\n' << "  " << optentry.description() << '\n';
+  FOREACH_CONST_OPTENTRY_END
   return ss.str();
 }
 
 int Optentries::handle(char letter, char * optarg){
-  for (BasicOptentry ** i = optentries_; *i; ++i){
-    if (letter == (*i)->letter()){
-      switch((*i)->handle(optarg)){
+  FOREACH_OPTENTRY_BEGIN
+    if (letter == optentry.letter()){
+      switch(optentry.handle(optarg)){
         case 0: return 0;
         case 1: return 2;
         case 2: return 3;
@@ -34,20 +53,25 @@ int Optentries::handle(char letter, char * optarg){
           return 3;
       }
     }
-  }
+  FOREACH_OPTENTRY_END
   return 1;
 }
 
-bool Optentries::validate(){
+bool Optentries::validate() const{
   bool success = true;
-  for (BasicOptentry ** i = optentries_; *i; ++i){
-    if (!(*i)->is_set()){
-      cerr << "ERROR: Option '-" << (*i)->letter() << "' is required.\n";
+  FOREACH_CONST_OPTENTRY_BEGIN
+    if (!optentry.is_set()){
+      cerr << "ERROR: Option '-" << optentry.letter() << "' is required.\n";
       success = false;
     }
-  }
+  FOREACH_CONST_OPTENTRY_END
   return success;
 }
+
+#undef FOREACH_OPTENTRY_BEGIN
+#undef FOREACH_CONST_OPTENTRY_BEGIN
+#undef FOREACH_OPTENTRY_END
+#undef FOREACH_CONST_OPTENTRY_END
 
 /* ---------------------------------------------------------------------------------------------- */
 

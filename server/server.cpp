@@ -58,13 +58,17 @@ struct AllOptentries {
 } OPTENTRIES;
 
 class GeneralOptentries: public cmdfw::optentries::Optentries {
-
 public:
-  GeneralOptentries():
-    cmdfw::optentries::Optentries(entries) {}
+  static auto_ptr<GeneralOptentries> create(){
+    auto_ptr<GeneralOptentries> ret(new GeneralOptentries());
+    ret->append_optentries();
+    return ret;
+  }
 protected:
-  GeneralOptentries(cmdfw::optentries::BasicOptentry ** entries):
-    cmdfw::optentries::Optentries(entries) {}
+  GeneralOptentries() {}
+  void append_optentries(){
+    cmdfw::optentries::Optentries::append_optentries(entries);
+  }
 
 public:
 
@@ -85,31 +89,34 @@ protected:
 };
 
 struct UdpOptentries: public GeneralOptentries {
-
 public:
-  UdpOptentries(): GeneralOptentries(entries) {
-    /*
-     * Object of this class is constructed when the corresponding mode is known to be chosen by user.
-     * So it is safe to tamper global OPTENTRIES structure here
-     */
+  static auto_ptr<UdpOptentries> create(){
+    auto_ptr<UdpOptentries> ret(new UdpOptentries());
+    ret->append_optentries();
+
+    /* This function is called when the corresponding mode is known to be chosen by user,
+     * so it is safe to tamper global OPTENTRIES structure here */
     OPTENTRIES.socket_type.socket_type = SOCK_DGRAM;
+
+    return ret;
   }
 protected:
-  UdpOptentries(cmdfw::optentries::BasicOptentry ** entries): GeneralOptentries(entries) {
-    /*
-     * Object of this class is constructed when the corresponding mode is known to be chosen by user.
-     * So it is safe to tamper global OPTENTRIES structure here
-     */
-    OPTENTRIES.socket_type.socket_type = SOCK_DGRAM;
-  }
+  UdpOptentries() {}
 };
 
 class LimitOptentries: public GeneralOptentries {
-
 public:
-  LimitOptentries(): GeneralOptentries(entries) {}
+  static auto_ptr<LimitOptentries> create(){
+    auto_ptr<LimitOptentries> ret(new LimitOptentries());
+    ret->append_optentries();
+    return ret;
+  }
 protected:
-  LimitOptentries(cmdfw::optentries::BasicOptentry ** entries): GeneralOptentries(entries) {}
+  LimitOptentries() {}
+  void append_optentries(){
+    GeneralOptentries::append_optentries();
+    cmdfw::optentries::Optentries::append_optentries(entries);
+  }
 
 public:
 
@@ -121,10 +128,6 @@ protected:
 };
 
 /* static */ cmdfw::optentries::BasicOptentry * LimitOptentries::entries[] = {
-  /* GeneralOptentries */
-  &OPTENTRIES.port,
-  &OPTENTRIES.buffer_size,
-
   &OPTENTRIES.limit,
   0
 };
@@ -153,7 +156,7 @@ public:
     cmdfw::mode::BasicMode(names, description), handler_(handler) { }
 
   /* override */ virtual auto_ptr<cmdfw::optentries::BasicOptentries> optentries() const {
-    return auto_ptr<cmdfw::optentries::BasicOptentries>(new Optentries());
+    return auto_ptr<cmdfw::optentries::BasicOptentries>(Optentries::create());
   }
 
   /* override */ virtual bool handle(cmdfw::optentries::BasicOptentries & optentries) const {

@@ -34,13 +34,17 @@ struct AllOptentries {
 } OPTENTRIES;
 
 class GeneralOptentries: public cmdfw::optentries::Optentries {
-
 public:
-  GeneralOptentries():
-    cmdfw::optentries::Optentries(entries) {}
+  static auto_ptr<GeneralOptentries> create(){
+    auto_ptr<GeneralOptentries> ret(new GeneralOptentries());
+    ret->append_optentries();
+    return ret;
+  }
 protected:
-  GeneralOptentries(cmdfw::optentries::BasicOptentry ** entries):
-    cmdfw::optentries::Optentries(entries) {}
+  GeneralOptentries() {}
+  void append_optentries(){
+    cmdfw::optentries::Optentries::append_optentries(entries);
+  }
 
 public:
 
@@ -67,11 +71,18 @@ protected:
 };
 
 struct CxxIoOptentries: public GeneralOptentries {
-
 public:
-  CxxIoOptentries(): GeneralOptentries(entries) {}
+  static auto_ptr<CxxIoOptentries> create(){
+    auto_ptr<CxxIoOptentries> ret(new CxxIoOptentries());
+    ret->append_optentries();
+    return ret;
+  }
 protected:
-  CxxIoOptentries(cmdfw::optentries::BasicOptentry ** entries): GeneralOptentries(entries) {}
+  CxxIoOptentries() {}
+  void append_optentries(){
+    cmdfw::optentries::Optentries::append_optentries(entries);
+    GeneralOptentries::append_optentries();
+  }
 
 public:
 
@@ -86,22 +97,22 @@ protected:
 /* static */ cmdfw::optentries::BasicOptentry * CxxIoOptentries::entries[] = {
   &OPTENTRIES.cxxio_input,
   &OPTENTRIES.cxxio_output,
-
-  /* GeneralOptentries */
-  &OPTENTRIES.addr,
-  &OPTENTRIES.port,
-  &OPTENTRIES.buffer_size,
-  &OPTENTRIES.verbosity,
-  &OPTENTRIES.quiet,
   0
 };
 
 struct CIoOptentries: public GeneralOptentries {
-
 public:
-  CIoOptentries(): GeneralOptentries(entries) {}
+  static auto_ptr<CIoOptentries> create(){
+    auto_ptr<CIoOptentries> ret(new CIoOptentries());
+    ret->append_optentries();
+    return ret;
+  }
 protected:
-  CIoOptentries(cmdfw::optentries::BasicOptentry ** entries): GeneralOptentries(entries) {}
+  CIoOptentries() {}
+  void append_optentries(){
+    cmdfw::optentries::Optentries::append_optentries(entries);
+    GeneralOptentries::append_optentries();
+  }
 
 public:
 
@@ -116,13 +127,6 @@ protected:
 /* static */ cmdfw::optentries::BasicOptentry * CIoOptentries::entries[] = {
   &OPTENTRIES.cio_input,
   &OPTENTRIES.cio_output,
-
-  /* GeneralOptentries */
-  &OPTENTRIES.addr,
-  &OPTENTRIES.port,
-  &OPTENTRIES.buffer_size,
-  &OPTENTRIES.verbosity,
-  &OPTENTRIES.quiet,
   0
 };
 
@@ -130,11 +134,18 @@ typedef CxxIoOptentries SelectWindowsOptentries;
 typedef CIoOptentries SelectUnixOptentries;
 
 struct MultiprotoOptentries: public CxxIoOptentries{
-
 public:
-  MultiprotoOptentries(): CxxIoOptentries(entries) {}
+  static auto_ptr<MultiprotoOptentries> create(){
+    auto_ptr<MultiprotoOptentries> ret(new MultiprotoOptentries());
+    ret->append_optentries();
+    return ret;
+  }
 protected:
-  MultiprotoOptentries(cmdfw::optentries::BasicOptentry ** entries): CxxIoOptentries(entries) {}
+  MultiprotoOptentries() {}
+  void append_optentries() {
+    cmdfw::optentries::Optentries::append_optentries(entries);
+    CxxIoOptentries::append_optentries();
+  }
 
 protected:
 
@@ -143,17 +154,6 @@ protected:
 
 /* static */ cmdfw::optentries::BasicOptentry * MultiprotoOptentries::entries[] = {
   &OPTENTRIES.socket_type,
-
-  /* CxxIoOptentries */
-  &OPTENTRIES.cxxio_input,
-  &OPTENTRIES.cxxio_output,
-
-  /* GeneralOptentries */
-  &OPTENTRIES.addr,
-  &OPTENTRIES.port,
-  &OPTENTRIES.buffer_size,
-  &OPTENTRIES.verbosity,
-  &OPTENTRIES.quiet,
   0
 };
 
@@ -177,7 +177,7 @@ public:
     cmdfw::mode::BasicMode(names, description), handler_(handler) { }
 
   /* override */ virtual auto_ptr<cmdfw::optentries::BasicOptentries> optentries() const {
-    return auto_ptr<cmdfw::optentries::BasicOptentries>(new Optentries());
+    return auto_ptr<cmdfw::optentries::BasicOptentries>(Optentries::create());
   }
 
   /* override */ virtual bool handle(cmdfw::optentries::BasicOptentries & optentries) const {
